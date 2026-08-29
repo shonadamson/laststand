@@ -196,7 +196,7 @@ export default function App() {
   const [kickoffTimes,setKickoffTimes]=useState({}); // { teamName/abbr -> Date }
   const [now,setNow]=useState(new Date());
 
-  const saveTimer=useRef(null);
+
 
   // Load initial state from Supabase
   useEffect(()=>{
@@ -207,19 +207,25 @@ export default function App() {
   },[]);
 
   // Subscribe to real-time updates from other users
+  const lastSaveTime = useRef(0);
   useEffect(()=>{
     const sub=subscribeToState(remoteState=>{
-      setState(remoteState);
+      // Only apply remote state if we haven't saved in the last 2 seconds
+      // to avoid overwriting our own just-saved state
+      if(Date.now() - lastSaveTime.current > 2000){
+        setState(remoteState);
+      }
     });
     return ()=>{ sub.unsubscribe(); };
   },[]);
 
-  // Debounced save to Supabase whenever state changes
+  // Save to Supabase whenever state changes
   useEffect(()=>{
     if(dbLoading) return;
-    clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(()=>saveLeagueState(state),800);
-    return ()=>clearTimeout(saveTimer.current);
+    lastSaveTime.current = Date.now();
+    saveLeagueState(state).then(success=>{
+      if(!success) console.error('Failed to save state');
+    });
   },[state,dbLoading]);
 
   // Tick clock every minute to re-check kickoff locks
