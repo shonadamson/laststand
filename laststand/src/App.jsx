@@ -275,7 +275,8 @@ export default function App() {
 
   // Auth
   const login=(username,password)=>{
-    const user=state.users.find(u=>u.username.toLowerCase()===username.toLowerCase()&&u.passwordHash===hashPassword(password));
+    // Trim whitespace to avoid accidental spaces causing login failures
+    const user=state.users.find(u=>u.username.toLowerCase()===username.trim().toLowerCase()&&u.passwordHash===hashPassword(password.trim()));
     if(!user){notify("Invalid username or password","error");return;}
     setLoggedInUser(user); setView("home");
   };
@@ -349,6 +350,40 @@ export default function App() {
       {user.teamName?.[0]?.toUpperCase()||user.username?.[0]?.toUpperCase()}
     </div>
   );
+
+  // ── USER ADMIN ROW ───────────────────────────────────────────────────────────
+  const UserAdminRow=({user, onReset, onRemove, Avatar})=>{
+    const [showReset, setShowReset]=useState(false);
+    const [newPw, setNewPw]=useState("");
+    const [newPw2, setNewPw2]=useState("");
+    return(
+      <div style={{background:"var(--surface2)",borderRadius:8,marginBottom:8,overflow:"hidden"}}>
+        <div className="player-admin-row">
+          <Avatar user={user} size={36}/>
+          <div className="padmin-info">
+            <span className="padmin-team">{user.teamName}</span>
+            <span className="padmin-un">@{user.username}</span>
+          </div>
+          <button style={{background:"none",border:"1px solid var(--border)",color:"var(--muted)",fontSize:11,padding:"4px 8px",borderRadius:6,cursor:"pointer",marginRight:6}} onClick={()=>{setShowReset(!showReset);setNewPw("");setNewPw2("");}}>
+            {showReset?"Cancel":"🔑 Reset PW"}
+          </button>
+          <button className="remove-btn" onClick={onRemove}>✕</button>
+        </div>
+        {showReset&&(
+          <div style={{padding:"10px 14px",borderTop:"1px solid var(--border)",display:"flex",flexDirection:"column",gap:8}}>
+            <input className="admin-input" type="password" placeholder="New password (min 4 chars)" value={newPw} onChange={e=>setNewPw(e.target.value)}/>
+            <input className="admin-input" type="password" placeholder="Confirm new password" value={newPw2} onChange={e=>setNewPw2(e.target.value)}/>
+            <button style={{background:"var(--accent)",color:"#000",border:"none",padding:"8px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:13}} onClick={()=>{
+              if(newPw!==newPw2){alert("Passwords don't match");return;}
+              if(newPw.length<4){alert("Password must be 4+ characters");return;}
+              onReset(user.id, newPw);
+              setShowReset(false);setNewPw("");setNewPw2("");
+            }}>Save New Password</button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── ADD PLAYER FORM ──────────────────────────────────────────────────────────
   const AddPlayerForm=({state,setState,notify})=>{
@@ -784,12 +819,23 @@ export default function App() {
       <input type="password" className="admin-pw-input" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(pw===ADMIN_PASSWORD)setAdminAuthed(true);else notify("Wrong password","error");}}}/>
       <button className="confirm-btn" onClick={()=>{if(pw===ADMIN_PASSWORD)setAdminAuthed(true);else notify("Wrong password","error");}}>Login</button>
     </div>);
-    const adminCreateUser=()=>{
+    const adminCreateUser=async()=>{
       if(!newUn.trim()||!newPw.trim()||!newTn.trim()){notify("All fields required","error");return;}
       if(state.users.find(u=>u.username.toLowerCase()===newUn.toLowerCase())){notify("Username taken","error");return;}
       const color=AVATAR_COLORS[state.users.length%AVATAR_COLORS.length];
-      const newUser={id:Date.now().toString(),username:newUn.trim(),passwordHash:hashPassword(newPw),teamName:newTn.trim(),avatarColor:color};
-      setState(s=>({...s,users:[...s.users,newUser]}));setNewUn("");setNewPw("");setNewTn("");notify(`${newTn} added!`);
+      const newUser={id:Date.now().toString(),username:newUn.trim(),passwordHash:hashPassword(newPw.trim()),teamName:newTn.trim(),avatarColor:color};
+      const newState={...state,users:[...state.users,newUser]};
+      setState(newState);
+      // Force immediate save so user can log in right away
+      await saveLeagueState(newState);
+      setNewUn("");setNewPw("");setNewTn("");
+      notify(`${newTn} added! They can now log in.`);
+    };
+
+    const adminResetPassword=(userId, newPassword)=>{
+      if(!newPassword.trim()||newPassword.trim().length<4){notify("Password must be 4+ characters","error");return;}
+      setState(s=>({...s,users:s.users.map(u=>u.id===userId?{...u,passwordHash:hashPassword(newPassword.trim())}:u)}));
+      notify("Password reset successfully!");
     };
     const setResultManual=(weekNum,categoryId,successfulPicks)=>{
       const wk=`w${weekNum}`;const weekPicks=state.picks[wk]||{};
@@ -881,11 +927,9 @@ export default function App() {
         </div>
         <h3 className="section-title" style={{marginTop:20}}>All Users ({state.users.length})</h3>
         <div className="player-list-admin">
-          {state.users.map(u=>(<div key={u.id} className="player-admin-row">
-            <Avatar user={u} size={36}/>
-            <div className="padmin-info"><span className="padmin-team">{u.teamName}</span><span className="padmin-un">@{u.username}</span></div>
-            <button className="remove-btn" onClick={()=>setState(s=>({...s,users:s.users.filter(x=>x.id!==u.id)}))}>✕</button>
-          </div>))}
+          {state.users.map(u=>(
+            <UserAdminRow key={u.id} user={u} onReset={adminResetPassword} onRemove={()=>setState(s=>({...s,users:s.users.filter(x=>x.id!==u.id)}))} Avatar={Avatar}/>
+          ))}
           {!state.users.length&&<p className="empty-msg">No users yet</p>}
         </div>
       </div>}
