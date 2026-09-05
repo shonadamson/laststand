@@ -590,11 +590,12 @@ export default function App() {
 
   const HomeView=()=>{
     const standings=getStandings();
-    const myRank=standings.findIndex(u=>u.id===loggedInUser.id)+1;
-    const myStats=standings.find(u=>u.id===loggedInUser.id);
+    const currentUser=state.users.find(u=>u.id===loggedInUser?.id);
+    const myRank=currentUser ? standings.findIndex(u=>u.id===currentUser.id)+1 : 0;
+    const myStats=currentUser ? standings.find(u=>u.id===currentUser.id) : null;
     const totalCats=CATEGORIES.length;
     const weekKey=`w${state.currentWeek}`;
-    const picksDue=CATEGORIES.filter(c=>!isEliminated(loggedInUser.id,c.id)&&!state.picks[weekKey]?.[loggedInUser.id]?.[c.id]).length;
+    const picksDue=currentUser ? CATEGORIES.filter(c=>!isEliminated(currentUser.id,c.id)&&!state.picks[weekKey]?.[currentUser.id]?.[c.id]).length : 0;
     const medalFor=(i)=>i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
     return(<div>
       <div className="home-header">
@@ -602,7 +603,7 @@ export default function App() {
         <div>{rosterLoading&&<span className="badge loading">⏳ Rosters…</span>}{rosterLoaded&&<span className="badge ready">✅ Live</span>}{rosterError&&<span className="badge berror">⚠️ Error</span>}</div>
       </div>
       <div className="my-status-card">
-        <div className="my-status-left"><Avatar user={loggedInUser} size={48}/><div><div className="my-status-team">{loggedInUser.teamName}</div><div className="my-status-rank">#{myRank} of {standings.length}</div></div></div>
+        <div className="my-status-left"><Avatar user={loggedInUser} size={48}/><div><div className="my-status-team">{loggedInUser.teamName}</div><div className="my-status-rank">{currentUser ? `#${myRank} of ${standings.length}` : "Admin"}</div></div></div>
         <div className="my-status-right">
           <div className="my-status-stat"><span className="my-status-num" style={{color:"var(--success)"}}>{myStats?.alive??totalCats}</span><span className="my-status-label">alive</span></div>
           <div className="my-status-divider"/>
@@ -614,7 +615,7 @@ export default function App() {
         <div className="lb-header"><span className="lb-title">🏆 Leaderboard</span><span className="lb-sub">{standings.length} teams · {totalCats} categories</span></div>
         {!standings.length&&<div className="lb-empty">No players yet</div>}
         {standings.map((u,i)=>{
-          const isMe=u.id===loggedInUser.id;
+          const isMe=u.id===currentUser?.id;
           const pct=Math.round((u.alive/totalCats)*100);
           const medal=medalFor(i);
           return(<div key={u.id} className={`lb-row ${isMe?"lb-me":""} ${i===0?"lb-first":""}`}>
