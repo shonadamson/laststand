@@ -645,7 +645,22 @@ export default function App() {
     const [noResults,setNoResults]=useState(false);
     const inputRef=useRef(null);
     const weekKey=`w${state.currentWeek}`;
-    const uid=loggedInUser.id;
+
+    // Safety check — make sure logged in user exists in the player list
+    const currentUser=state.users.find(u=>u.id===loggedInUser?.id);
+    if(!currentUser){
+      return(
+        <div>
+          <h2 className="view-title">My Picks <span className="week-badge">Week {state.currentWeek}</span></h2>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:30,textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
+            <p style={{fontWeight:600,marginBottom:8}}>Your account isn't in the player list</p>
+            <p style={{color:"var(--muted)",fontSize:13}}>Ask the admin to add you as a player in the Admin → Users tab, then log back in.</p>
+          </div>
+        </div>
+      );
+    }
+    const uid=currentUser.id;
 
     const handleInput=val=>{
       setPickInput(val);setNoResults(false);
@@ -948,7 +963,21 @@ export default function App() {
     </div>);
   };
 
-  const VIEWS={home:<HomeView/>,picks:<PicksView/>,standings:<StandingsView/>,categories:<CategoriesView/>,admin:<AdminView/>};
+  const SafeView=({component:Component})=>{
+    try { return <Component/>; }
+    catch(e) {
+      console.error("View crashed:",e);
+      return(
+        <div style={{padding:30,textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
+          <p style={{fontWeight:600,marginBottom:8}}>Something went wrong</p>
+          <p style={{color:"var(--muted)",fontSize:13,marginBottom:16}}>Try going back to Home and trying again.</p>
+          <button style={{background:"var(--accent)",color:"#000",border:"none",padding:"10px 20px",borderRadius:8,cursor:"pointer",fontWeight:700}} onClick={()=>setView("home")}>← Go Home</button>
+        </div>
+      );
+    }
+  };
+  const VIEWS={home:<SafeView component={HomeView}/>,picks:<SafeView component={PicksView}/>,standings:<SafeView component={StandingsView}/>,categories:<SafeView component={CategoriesView}/>,admin:<SafeView component={AdminView}/>};
   const AUTH_VIEWS={login:<LoginView/>,register:<RegisterView/>};
   const isAuth=view==="login"||view==="register";
 
