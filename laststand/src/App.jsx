@@ -334,11 +334,13 @@ export default function App() {
 
   const searchPlayers=(query,positions)=>{
     if(!query||query.length<2) return [];
-    const q=query.toLowerCase(),isDef=positions.includes("DEF_PLAYER");
+    const q=query.toLowerCase();
+    if(!positions||positions.length===0) return allPlayers.filter(p=>p.name.toLowerCase().includes(q)).slice(0,10);
+    const isDef=positions.includes("DEF_PLAYER");
     return allPlayers.filter(p=>{
       if(!p.name.toLowerCase().includes(q)) return false;
       if(isDef) return DEF_POSITIONS.includes(p.pos);
-      return positions.includes(p.pos);
+      return positions.some(pos=>pos===p.pos);
     }).slice(0,10);
   };
   const searchTeams=(query)=>{
