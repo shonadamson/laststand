@@ -185,6 +185,11 @@ export default function App() {
   const [dbError,setDbError]=useState(null);
   const [loggedInUser,setLoggedInUser]=useState(null);
   const [adminAuthed,setAdminAuthed]=useState(false);
+  const [adminTab,setAdminTab]=useState("grade");
+  const [adminNewUn,setAdminNewUn]=useState("");
+  const [adminNewPw,setAdminNewPw]=useState("");
+  const [adminNewTn,setAdminNewTn]=useState("");
+  const [adminResultInputs,setAdminResultInputs]=useState({});
   const [view,setView]=useState("login");
   const [notification,setNotification]=useState(null);
   const [teams]=useState(TEAM_LIST);
@@ -208,41 +213,24 @@ export default function App() {
 
   // Subscribe to real-time updates from other users
   const lastSaveTime = useRef(0);
-  const currentViewRef = useRef("login");
-  const loggedInUserRef = useRef(null);
-
-  // Keep refs in sync so subscription can access latest values
-  useEffect(()=>{ currentViewRef.current = view; },[view]);
-  useEffect(()=>{ loggedInUserRef.current = loggedInUser; },[loggedInUser]);
-
   useEffect(()=>{
     const sub=subscribeToState(remoteState=>{
-      // Only apply remote state if:
-      // 1. We haven't saved in the last 3 seconds (avoid overwriting own saves)
-      // 2. Someone is actually logged in (don't disrupt login flow)
-      if(Date.now() - lastSaveTime.current > 3000 && loggedInUserRef.current){
-        // Merge only the game data, never touch auth-related navigation
-        setState(prev=>({
-          ...remoteState,
-          // Preserve any local state that shouldn't be overwritten by remote
-        }));
+      // Only apply remote state if we haven't saved in the last 2 seconds
+      // to avoid overwriting our own just-saved state
+      if(Date.now() - lastSaveTime.current > 2000){
+        setState(remoteState);
       }
     });
     return ()=>{ sub.unsubscribe(); };
   },[]);
 
-  // Save to Supabase whenever state changes (debounced to avoid rapid-fire saves)
-  const saveDebounce = useRef(null);
+  // Save to Supabase whenever state changes
   useEffect(()=>{
     if(dbLoading) return;
-    clearTimeout(saveDebounce.current);
-    saveDebounce.current = setTimeout(()=>{
-      lastSaveTime.current = Date.now();
-      saveLeagueState(state).then(success=>{
-        if(!success) console.error('Failed to save state');
-      });
-    }, 500);
-    return ()=>clearTimeout(saveDebounce.current);
+    lastSaveTime.current = Date.now();
+    saveLeagueState(state).then(success=>{
+      if(!success) console.error('Failed to save state');
+    });
   },[state,dbLoading]);
 
   // Tick clock every minute to re-check kickoff locks
@@ -579,8 +567,8 @@ export default function App() {
       <div className="auth-logo">LAST<br/>STAND</div>
       <p className="auth-sub">NFL Survivor Fantasy</p>
       <div className="auth-fields">
-        <input className="auth-input" placeholder="Username" value={un} onChange={e=>setUn(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="username" spellCheck="false"/>
-        <input className="auth-input" type="password" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} autoComplete="current-password" onKeyDown={e=>e.key==="Enter"&&login(un,pw)}/>
+        <input className="auth-input" placeholder="Username" value={un} onChange={e=>setUn(e.target.value)} autoCapitalize="off"/>
+        <input className="auth-input" type="password" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login(un,pw)}/>
         <button className="auth-btn primary" onClick={()=>login(un,pw)}>Sign In</button>
         <button className="auth-btn ghost" onClick={()=>setView("register")}>Create Account</button>
       </div>
@@ -596,10 +584,10 @@ export default function App() {
       <div className="auth-logo small">LAST STAND</div>
       <p className="auth-sub">Create your account</p>
       <div className="auth-fields">
-        <input className="auth-input" placeholder="Username" value={un} onChange={e=>setUn(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="username" spellCheck="false"/>
-        <input className="auth-input" placeholder="Team Name" value={tn} onChange={e=>setTn(e.target.value)} autoCorrect="off"/>
-        <input className="auth-input" type="password" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} autoComplete="new-password"/>
-        <input className="auth-input" type="password" placeholder="Confirm Password" value={pw2} onChange={e=>setPw2(e.target.value)} autoComplete="new-password" onKeyDown={e=>e.key==="Enter"&&submit()}/>
+        <input className="auth-input" placeholder="Username" value={un} onChange={e=>setUn(e.target.value)} autoCapitalize="off"/>
+        <input className="auth-input" placeholder="Team Name" value={tn} onChange={e=>setTn(e.target.value)}/>
+        <input className="auth-input" type="password" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)}/>
+        <input className="auth-input" type="password" placeholder="Confirm Password" value={pw2} onChange={e=>setPw2(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
         <button className="auth-btn primary" onClick={submit}>Create Account</button>
       </div>
     </div></div>);
@@ -843,9 +831,8 @@ export default function App() {
   </div>);
 
   const AdminView=()=>{
-    const [pw,setPw]=useState("");const [tab,setTab]=useState("grade");
-    const [resultInputs,setResultInputs]=useState({});
-    const [newUn,setNewUn]=useState("");const [newPw,setNewPw]=useState("");const [newTn,setNewTn]=useState("");
+    const [pw,setPw]=useState("");
+
     const weekKey=`w${state.currentWeek}`;
     if(!adminAuthed) return(<div className="admin-login">
       <div className="lock-icon">🔒</div><h2>Admin Access</h2><p style={{color:"var(--muted)"}}>Enter admin password</p>
@@ -853,16 +840,16 @@ export default function App() {
       <button className="confirm-btn" onClick={()=>{if(pw===ADMIN_PASSWORD)setAdminAuthed(true);else notify("Wrong password","error");}}>Login</button>
     </div>);
     const adminCreateUser=async()=>{
-      if(!newUn.trim()||!newPw.trim()||!newTn.trim()){notify("All fields required","error");return;}
-      if(state.users.find(u=>u.username.toLowerCase()===newUn.toLowerCase())){notify("Username taken","error");return;}
+      if(!adminNewUn.trim()||!adminNewPw.trim()||!adminNewTn.trim()){notify("All fields required","error");return;}
+      if(state.users.find(u=>u.username.toLowerCase()===adminNewUn.toLowerCase())){notify("Username taken","error");return;}
       const color=AVATAR_COLORS[state.users.length%AVATAR_COLORS.length];
-      const newUser={id:Date.now().toString(),username:newUn.trim(),passwordHash:hashPassword(newPw.trim()),teamName:newTn.trim(),avatarColor:color};
+      const newUser={id:Date.now().toString(),username:adminNewUn.trim(),passwordHash:hashPassword(adminNewPw.trim()),teamName:adminNewTn.trim(),avatarColor:color};
       const newState={...state,users:[...state.users,newUser]};
       setState(newState);
       // Force immediate save so user can log in right away
       await saveLeagueState(newState);
-      setNewUn("");setNewPw("");setNewTn("");
-      notify(`${newTn} added! They can now log in.`);
+      setAdminNewUn("");setAdminNewPw("");setAdminNewTn("");
+      notify(`${adminNewTn} added! They can now log in.`);
     };
 
     const adminResetPassword=(userId, newPassword)=>{
@@ -884,79 +871,14 @@ export default function App() {
     return(<div>
       <h2 className="view-title">Admin Panel</h2>
       <div className="admin-tabs">
-        {["grade","picks","results","roster","settings","users","week"].map(t=>(
-          <button key={t} className={`admin-tab ${tab===t?"active":""}`} onClick={()=>setTab(t)}>
-            {t==="grade"?"⚡ Grade":t==="picks"?"👁 Picks":t==="results"?"📋 Results":t==="roster"?"🏈 Roster":t==="settings"?"⚙️ Rules":t==="users"?"👥 Users":"📅 Week"}
+        {["grade","results","roster","settings","users","week"].map(t=>(
+          <button key={t} className={`admin-tab ${adminTab===t?"active":""}`} onClick={()=>setAdminTab(t)}>
+            {t==="grade"?"⚡ Grade":t==="results"?"📋 Results":t==="settings"?"⚙️ Rules":t==="users"?"👥 Users":"📅 Week"}
           </button>
         ))}
       </div>
-      {tab==="grade"&&<div><h3 className="section-title">ESPN Auto-Grader</h3><AutoGrader weekNum={state.currentWeek}/></div>}
-      {tab==="picks"&&<div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <h3 className="section-title">Week {state.currentWeek} Picks Overview</h3>
-          <span style={{fontSize:12,color:"var(--muted)"}}>{state.users.length} players</span>
-        </div>
-        <p style={{color:"var(--muted)",fontSize:13,marginBottom:14}}>See all picks at a glance. Missing picks shown in red.</p>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead>
-              <tr>
-                <th style={{textAlign:"left",padding:"8px 10px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",fontWeight:700,position:"sticky",left:0,zIndex:2,minWidth:100}}>Player</th>
-                {CATEGORIES.map(cat=>(
-                  <th key={cat.id} style={{padding:"6px 8px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",textAlign:"center",minWidth:80,fontWeight:600}}>
-                    {cat.icon}<br/><span style={{fontSize:10,color:"var(--muted)",fontWeight:400}}>{cat.name.split("/")[0].trim()}</span>
-                  </th>
-                ))}
-                <th style={{padding:"6px 8px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",textAlign:"center",minWidth:70,fontWeight:600}}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.users.map((u,i)=>{
-                const weekKey=`w${state.currentWeek}`;
-                const userPicks=state.picks[weekKey]?.[u.id]||{};
-                const aliveCats=CATEGORIES.filter(c=>!isEliminated(u.id,c.id));
-                const missingCount=aliveCats.filter(c=>!userPicks[c.id]).length;
-                const totalPicked=aliveCats.filter(c=>userPicks[c.id]).length;
-                return(
-                  <tr key={u.id} style={{background:i%2===0?"var(--surface)":"var(--surface2)"}}>
-                    <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid var(--border)",position:"sticky",left:0,background:i%2===0?"var(--surface)":"var(--surface2)",zIndex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <div style={{width:22,height:22,borderRadius:"50%",background:u.avatarColor||"var(--accent)",color:"#000",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{u.teamName?.[0]}</div>
-                        <span style={{fontSize:11}}>{u.teamName}</span>
-                      </div>
-                    </td>
-                    {CATEGORIES.map(cat=>{
-                      const elim=isEliminated(u.id,cat.id);
-                      const pick=userPicks[cat.id];
-                      return(
-                        <td key={cat.id} style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid var(--border)",borderLeft:"1px solid var(--border)"}}>
-                          {elim
-                            ?<span style={{color:"var(--accent2)",fontSize:11}}>💀</span>
-                            :pick
-                              ?<span style={{color:"var(--success)",fontSize:10,display:"block",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={pick}>✓ {pick}</span>
-                              :<span style={{color:"var(--accent2)",fontWeight:700,fontSize:11}}>—</span>
-                          }
-                        </td>
-                      );
-                    })}
-                    <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid var(--border)",borderLeft:"1px solid var(--border)"}}>
-                      {missingCount===0
-                        ?<span style={{color:"var(--success)",fontSize:11,fontWeight:700}}>✅ Done</span>
-                        :<span style={{color:"var(--accent2)",fontSize:11,fontWeight:700}}>⚠️ {missingCount} missing</span>
-                      }
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {state.users.length===0&&<p className="empty-msg">No players yet</p>}
-        <div style={{marginTop:14,padding:"10px 14px",background:"var(--surface2)",borderRadius:8,fontSize:12,color:"var(--muted)"}}>
-          💡 ✅ = pick submitted &nbsp;|&nbsp; — = pick missing (still alive) &nbsp;|&nbsp; 💀 = eliminated from category
-        </div>
-      </div>}
-      {tab==="results"&&<div>
+      {adminTab==="grade"&&<div><h3 className="section-title">ESPN Auto-Grader</h3><AutoGrader weekNum={state.currentWeek}/></div>}
+      {adminTab==="results"&&<div>
         <h3 className="section-title">Manual Results — Week {state.currentWeek}</h3>
         <p style={{color:"var(--muted)",fontSize:13,marginBottom:14}}>Check picks that met the threshold this week:</p>
         {CATEGORIES.map(cat=>{
@@ -966,15 +888,15 @@ export default function App() {
             <div className="result-picks">
               {!allPicks.length?<span className="no-picks-msg">No picks made</span>:allPicks.map(pick=>(
                 <label key={pick} className="pick-check">
-                  <input type="checkbox" checked={resultInputs[cat.id]?.includes(pick)||false} onChange={e=>setResultInputs(prev=>{const cur=prev[cat.id]||[];return{...prev,[cat.id]:e.target.checked?[...cur,pick]:cur.filter(p=>p!==pick)};})}/>{pick}
+                  <input type="checkbox" checked={adminResultInputs[cat.id]?.includes(pick)||false} onChange={e=>setAdminResultInputs(prev=>{const cur=prev[cat.id]||[];return{...prev,[cat.id]:e.target.checked?[...cur,pick]:cur.filter(p=>p!==pick)};})}/>{pick}
                 </label>
               ))}
             </div>
-            <button className="save-result-btn" onClick={()=>setResultManual(state.currentWeek,cat.id,resultInputs[cat.id]||[])}>Save</button>
+            <button className="save-result-btn" onClick={()=>setResultManual(state.currentWeek,cat.id,adminResultInputs[cat.id]||[])}>Save</button>
           </div>);
         })}
       </div>}
-      {tab==="roster"&&<div>
+      {adminTab==="roster"&&<div>
         <h3 className="section-title">Custom Players</h3>
         <p style={{color:"var(--muted)",fontSize:13,marginBottom:14}}>Add players not in the built-in roster (new signings, call-ups, etc):</p>
         <AddPlayerForm state={state} setState={setState} notify={notify}/>
@@ -993,7 +915,7 @@ export default function App() {
         </div>
       </div>}
 
-      {tab==="settings"&&<div>
+      {adminTab==="settings"&&<div>
         <h3 className="section-title">Category Rules</h3>
         <p style={{color:"var(--muted)",fontSize:13,marginBottom:14}}>Adjust thresholds for each category:</p>
         <div className="settings-list">
@@ -1015,12 +937,12 @@ export default function App() {
         </div>
         <button className="reset-thresholds-btn" onClick={()=>{if(window.confirm("Reset all thresholds to defaults?"))setState(s=>({...s,thresholds:DEFAULT_THRESHOLDS}));}}>↩ Reset to Defaults</button>
       </div>}
-      {tab==="users"&&<div>
+      {adminTab==="users"&&<div>
         <h3 className="section-title">Add User</h3>
         <div className="admin-fields">
-          <input className="admin-input" placeholder="Username" value={newUn} onChange={e=>setNewUn(e.target.value)} autoCapitalize="off"/>
-          <input className="admin-input" placeholder="Team Name" value={newTn} onChange={e=>setNewTn(e.target.value)}/>
-          <input className="admin-input" type="password" placeholder="Password" value={newPw} onChange={e=>setNewPw(e.target.value)}/>
+          <input className="admin-input" placeholder="Username" value={adminNewUn} onChange={e=>setAdminNewUn(e.target.value)} autoCapitalize="off"/>
+          <input className="admin-input" placeholder="Team Name" value={adminNewTn} onChange={e=>setAdminNewTn(e.target.value)}/>
+          <input className="admin-input" type="password" placeholder="Password" value={adminNewPw} onChange={e=>setAdminNewPw(e.target.value)}/>
           <button className="confirm-btn" onClick={adminCreateUser}>Add User</button>
         </div>
         <h3 className="section-title" style={{marginTop:20}}>All Users ({state.users.length})</h3>
@@ -1031,7 +953,7 @@ export default function App() {
           {!state.users.length&&<p className="empty-msg">No users yet</p>}
         </div>
       </div>}
-      {tab==="week"&&<div>
+      {adminTab==="week"&&<div>
         <h3 className="section-title">Week Management</h3>
         <div className="week-controls">
           <button className="week-btn" onClick={()=>setState(s=>({...s,currentWeek:Math.max(1,s.currentWeek-1)}))}>← Prev</button>
