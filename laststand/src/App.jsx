@@ -871,13 +871,77 @@ export default function App() {
     return(<div>
       <h2 className="view-title">Admin Panel</h2>
       <div className="admin-tabs">
-        {["grade","results","roster","settings","users","week"].map(t=>(
+        {["grade","picks","results","roster","settings","users","week"].map(t=>(
           <button key={t} className={`admin-tab ${adminTab===t?"active":""}`} onClick={()=>setAdminTab(t)}>
-            {t==="grade"?"⚡ Grade":t==="results"?"📋 Results":t==="settings"?"⚙️ Rules":t==="users"?"👥 Users":"📅 Week"}
+            {t==="grade"?"⚡ Grade":t==="picks"?"👁 Picks":t==="results"?"📋 Results":t==="roster"?"🏈 Roster":t==="settings"?"⚙️ Rules":t==="users"?"👥 Users":"📅 Week"}
           </button>
         ))}
       </div>
       {adminTab==="grade"&&<div><h3 className="section-title">ESPN Auto-Grader</h3><AutoGrader weekNum={state.currentWeek}/></div>}
+      {adminTab==="picks"&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <h3 className="section-title">Week {state.currentWeek} Picks Overview</h3>
+          <span style={{fontSize:12,color:"var(--muted)"}}>{state.users.length} players</span>
+        </div>
+        <p style={{color:"var(--muted)",fontSize:13,marginBottom:14}}>See all picks at a glance. Missing picks shown with —</p>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr>
+                <th style={{textAlign:"left",padding:"8px 10px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",fontWeight:700,position:"sticky",left:0,zIndex:2,minWidth:100}}>Player</th>
+                {CATEGORIES.map(cat=>(
+                  <th key={cat.id} style={{padding:"6px 8px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",textAlign:"center",minWidth:80,fontWeight:600}}>
+                    {cat.icon}<br/><span style={{fontSize:10,color:"var(--muted)",fontWeight:400}}>{cat.name.split("/")[0].trim()}</span>
+                  </th>
+                ))}
+                <th style={{padding:"6px 8px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",textAlign:"center",minWidth:80,fontWeight:600}}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.users.map((u,i)=>{
+                const weekKey=`w${state.currentWeek}`;
+                const userPicks=state.picks[weekKey]?.[u.id]||{};
+                const aliveCats=CATEGORIES.filter(c=>!isEliminated(u.id,c.id));
+                const missingCount=aliveCats.filter(c=>!userPicks[c.id]).length;
+                return(
+                  <tr key={u.id} style={{background:i%2===0?"var(--surface)":"var(--surface2)"}}>
+                    <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid var(--border)",position:"sticky",left:0,background:i%2===0?"var(--surface)":"var(--surface2)",zIndex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",background:u.avatarColor||"var(--accent)",color:"#000",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{u.teamName?.[0]}</div>
+                        <span style={{fontSize:11}}>{u.teamName}</span>
+                      </div>
+                    </td>
+                    {CATEGORIES.map(cat=>{
+                      const elim=isEliminated(u.id,cat.id);
+                      const pick=userPicks[cat.id];
+                      return(
+                        <td key={cat.id} style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid var(--border)",borderLeft:"1px solid var(--border)"}}>
+                          {elim
+                            ?<span style={{color:"var(--accent2)",fontSize:11}}>💀</span>
+                            :pick
+                              ?<span style={{color:"var(--success)",fontSize:10,display:"block",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={pick}>✓ {pick}</span>
+                              :<span style={{color:"var(--accent2)",fontWeight:700,fontSize:14}}>—</span>
+                          }
+                        </td>
+                      );
+                    })}
+                    <td style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid var(--border)",borderLeft:"1px solid var(--border)"}}>
+                      {missingCount===0
+                        ?<span style={{color:"var(--success)",fontSize:11,fontWeight:700}}>✅ Done</span>
+                        :<span style={{color:"var(--accent2)",fontSize:11,fontWeight:700}}>⚠️ {missingCount} left</span>
+                      }
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {state.users.length===0&&<p className="empty-msg">No players yet</p>}
+        <div style={{marginTop:14,padding:"10px 14px",background:"var(--surface2)",borderRadius:8,fontSize:12,color:"var(--muted)"}}>
+          ✓ = picked &nbsp;|&nbsp; — = missing &nbsp;|&nbsp; 💀 = eliminated
+        </div>
+      </div>}
       {adminTab==="results"&&<div>
         <h3 className="section-title">Manual Results — Week {state.currentWeek}</h3>
         <p style={{color:"var(--muted)",fontSize:13,marginBottom:14}}>Check picks that met the threshold this week:</p>
