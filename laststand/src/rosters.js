@@ -34,6 +34,9 @@ export const NFL_TEAMS = [
   {name:"Tampa Bay Buccaneers",abbr:"TB",short:"Buccaneers"},
   {name:"Tennessee Titans",abbr:"TEN",short:"Titans"},
   {name:"Washington Commanders",abbr:"WSH",short:"Commanders"},
+];
+
+export const NFL_ROSTERS = [
   {name:"Khalil Shakir",pos:"WR",teamAbbr:"BUF"},
   {name:"Keon Coleman",pos:"WR",teamAbbr:"BUF"},
   {name:"Skyler Bell",pos:"WR",teamAbbr:"BUF"},
@@ -163,9 +166,6 @@ export const NFL_TEAMS = [
   {name:"Rashid Shaheed",pos:"WR",teamAbbr:"SEA"},
   {name:"Cooper Kupp",pos:"WR",teamAbbr:"SEA"},
   {name:"AJ Barner",pos:"TE",teamAbbr:"SEA"},
-];
-
-export const NFL_ROSTERS = [
   // ── ARIZONA CARDINALS ──
   {name:"Jacoby Brissett",pos:"QB",teamAbbr:"ARI"},
   {name:"Gardner Minshew II",pos:"QB",teamAbbr:"ARI"},
