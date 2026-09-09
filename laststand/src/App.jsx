@@ -285,12 +285,16 @@ export default function App() {
     if(!user){notify("Invalid username or password","error");return;}
     setLoggedInUser(user); setView("home");
   };
-  const register=(username,password,teamName)=>{
+  const register=async(username,password,teamName)=>{
     if(!username.trim()||!password.trim()||!teamName.trim()){notify("All fields required","error");return;}
     if(state.users.find(u=>u.username.toLowerCase()===username.toLowerCase())){notify("Username taken","error");return;}
     const color=AVATAR_COLORS[state.users.length%AVATAR_COLORS.length];
-    const newUser={id:Date.now().toString(),username:username.trim(),passwordHash:hashPassword(password),teamName:teamName.trim(),avatarColor:color};
-    setState(s=>({...s,users:[...s.users,newUser]}));
+    const newUser={id:Date.now().toString(),username:username.trim(),passwordHash:hashPassword(password.trim()),teamName:teamName.trim(),avatarColor:color};
+    const newState={...state,users:[...state.users,newUser]};
+    setState(newState);
+    // Force immediate save so the user appears for everyone right away
+    const success = await saveLeagueState(newState);
+    if(!success) notify("Warning: account may not have saved — please try again","error");
     setLoggedInUser(newUser); setView("home"); notify(`Welcome, ${teamName}! 🏈`);
   };
   const logout=()=>{setLoggedInUser(null);setAdminAuthed(false);setView("login");};
