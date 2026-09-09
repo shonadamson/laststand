@@ -333,21 +333,41 @@ export default function App() {
   const applyApprovedGrades=(weekNum,gradingData)=>{
     const weekKey=`w${weekNum}`;
     const weekPicks=state.picks[weekKey]||{};
-    const newElims=JSON.parse(JSON.stringify(state.eliminations||{}));
     const newResults={};
+
+    // Recalculate eliminations from scratch across ALL weeks
+    // This ensures re-grading correctly fixes mistakes
+    const newElims={};
+
+    // First pass: collect all week results including this week's new grades
+    const allResults={...state.results};
     CATEGORIES.forEach(cat=>{
       const catGrades=gradingData[cat.id]||{};
       const successfulPicks=Object.entries(catGrades).filter(([,v])=>v.passed).map(([k])=>k);
       newResults[cat.id]=successfulPicks;
+      allResults[weekKey]={...allResults[weekKey],[cat.id]:successfulPicks};
+    });
+
+    // Second pass: replay all weeks to recalculate eliminations correctly
+    CATEGORIES.forEach(cat=>{
       state.users.forEach(user=>{
-        if(isEliminated(user.id,cat.id)) return;
-        const pick=weekPicks[user.id]?.[cat.id];
-        if(!pick||!successfulPicks.includes(pick)){
-          if(!newElims[user.id]) newElims[user.id]={};
-          newElims[user.id][cat.id]=true;
+        // Check each week in order
+        const weeks=Object.keys(state.picks).sort();
+        for(const wk of weeks){
+          if(newElims[user.id]?.[cat.id]) break; // already eliminated
+          const pick=state.picks[wk]?.[user.id]?.[cat.id];
+          const weekResults=allResults[wk]?.[cat.id]||[];
+          // If results exist for this week and pick failed (or no pick), eliminate
+          if(allResults[wk] && allResults[wk][cat.id] !== undefined){
+            if(!pick||!weekResults.includes(pick)){
+              if(!newElims[user.id]) newElims[user.id]={};
+              newElims[user.id][cat.id]=true;
+            }
+          }
         }
       });
     });
+
     setState(s=>({...s,eliminations:newElims,results:{...s.results,[weekKey]:newResults},weekLocked:{...s.weekLocked,[weekKey]:true},gradingResults:{...s.gradingResults,[weekKey]:gradingData}}));
     notify("Week approved & published! 🏈");
   };
@@ -527,7 +547,16 @@ export default function App() {
         default: return "";
       }
     };
-    if(step==="approved") return <div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>✅</div><p>Week {weekNum} graded &amp; published!</p></div>;
+    if(step==="approved") return(
+      <div style={{textAlign:"center",padding:"40px 20px"}}>
+        <div style={{fontSize:48,marginBottom:12}}>✅</div>
+        <p style={{fontWeight:600,fontSize:16,marginBottom:6}}>Week {weekNum} graded &amp; published!</p>
+        <p style={{color:"var(--muted)",fontSize:13,marginBottom:20}}>Made a mistake? You can re-grade to correct it.</p>
+        <button style={{background:"var(--surface2)",border:"1px solid var(--border)",color:"var(--text)",padding:"10px 20px",borderRadius:8,cursor:"pointer",fontSize:13}} onClick={()=>{setDraft(null);setStep("idle");}}>
+          ↩ Re-grade Week {weekNum}
+        </button>
+      </div>
+    );
     return(
       <div>
         {step==="idle"&&<div>
