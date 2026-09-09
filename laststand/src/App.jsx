@@ -84,10 +84,26 @@ function fuzzyMatch(a,b) {
 
 // ESPN APIs — with CORS proxy fallback
 // Route ESPN calls through our own Vercel serverless function to avoid CORS
+const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/football/nfl";
+
 async function espnFetch(path) {
-  const r = await fetch(`/api/espn?path=${encodeURIComponent(path)}`);
-  if (!r.ok) throw new Error("ESPN fetch failed: " + r.status);
-  return r.json();
+  const url = `${ESPN_BASE}/${path}`;
+  // Try 1: Direct browser request (works from some networks)
+  try {
+    const r = await fetch(url);
+    if (r.ok) return r.json();
+  } catch {}
+  // Try 2: Our Vercel serverless proxy
+  try {
+    const r = await fetch(`/api/espn?path=${encodeURIComponent(path)}`);
+    if (r.ok) return r.json();
+  } catch {}
+  // Try 3: Public CORS proxy
+  try {
+    const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+    if (r.ok) return r.json();
+  } catch {}
+  throw new Error("All ESPN fetch attempts failed");
 }
 
 async function fetchAllTeams() {
@@ -1029,6 +1045,23 @@ export default function App() {
           <button className="week-btn" onClick={()=>setState(s=>({...s,currentWeek:Math.max(1,s.currentWeek-1)}))}>← Prev</button>
           <span className="week-display">Week {state.currentWeek}</span>
           <button className="week-btn" onClick={()=>setState(s=>({...s,currentWeek:s.currentWeek+1}))}>Next →</button>
+        </div>
+        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:16}}>
+          <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>🔒 Pick Lock — Week {state.currentWeek}</h4>
+          <p style={{fontSize:12,color:"var(--muted)",marginBottom:14}}>Lock picks manually when games start. Use this if the automatic kickoff lock isn't working.</p>
+          {isWeekLocked(state.currentWeek)
+            ?<div>
+              <div style={{background:"rgba(60,255,138,.1)",border:"1px solid var(--success)",borderRadius:8,padding:"10px 14px",fontSize:13,color:"var(--success)",marginBottom:10}}>✅ Week {state.currentWeek} picks are LOCKED</div>
+              <button style={{background:"none",border:"1px solid var(--accent2)",color:"var(--accent2)",padding:"10px 18px",borderRadius:8,cursor:"pointer",fontSize:13,width:"100%"}}
+                onClick={()=>{if(window.confirm("Unlock picks for Week "+state.currentWeek+"?"))setState(s=>({...s,weekLocked:{...s.weekLocked,[`w${state.currentWeek}`]:false}}))}}>
+                🔓 Unlock Week {state.currentWeek} Picks
+              </button>
+            </div>
+            :<button style={{background:"var(--accent)",color:"#000",border:"none",padding:12,borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14,width:"100%"}}
+              onClick={()=>{if(window.confirm("Lock all picks for Week "+state.currentWeek+"? Players cannot change picks after this."))setState(s=>({...s,weekLocked:{...s.weekLocked,[`w${state.currentWeek}`]:true}}))}}>
+              🔒 Lock All Week {state.currentWeek} Picks Now
+            </button>
+          }
         </div>
         <div className="danger-zone">
           <h4>⚠️ Danger Zone</h4>
