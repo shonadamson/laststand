@@ -731,6 +731,7 @@ export default function App() {
         <button className="auth-btn ghost" onClick={()=>setView("register")}>Create Account</button>
       </div>
       <button className="admin-login-link" onClick={()=>setView("admin")}>⚙️ Admin Access</button>
+      <p style={{textAlign:"center",fontSize:10,color:"rgba(107,107,128,0.5)",marginTop:8}}>© 2026 Shon Ryan Adamson. All Rights Reserved.<br/>Last Stand is an original concept created in August 2017.</p>
     </div></div>);
   };
 
@@ -1518,6 +1519,9 @@ export default function App() {
               </button>
             ))}
           </nav>
+          <div style={{textAlign:"center",padding:"6px 20px 4px",fontSize:10,color:"rgba(107,107,128,0.6)",background:"rgba(10,10,15,0.95)",borderTop:"1px solid rgba(255,255,255,0.04)"}}>
+            © 2026 Shon Ryan Adamson. All Rights Reserved. Last Stand is an original concept created in August 2017.
+          </div>
         </>)
       }
     </div>
