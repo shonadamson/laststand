@@ -264,11 +264,12 @@ export default function App() {
   // Check if a given team name/abbr has already kicked off
   const hasGameStarted=(teamNameOrAbbr)=>{
     if(!teamNameOrAbbr) return false;
-    const key=Object.keys(kickoffTimes).find(k=>
-      k.toLowerCase()===teamNameOrAbbr.toLowerCase()||
-      k.toLowerCase().includes(teamNameOrAbbr.toLowerCase())||
-      teamNameOrAbbr.toLowerCase().includes(k.toLowerCase())
-    );
+    const search=teamNameOrAbbr.toLowerCase().trim();
+    // Exact match only — no fuzzy matching to avoid false locks
+    const key=Object.keys(kickoffTimes).find(k=>{
+      const k2=k.toLowerCase().trim();
+      return k2===search;
+    });
     if(!key) return false;
     return now >= kickoffTimes[key];
   };
