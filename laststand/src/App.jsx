@@ -214,7 +214,8 @@ export default function App() {
   const rosterLoading=false;
   const rosterLoaded=true;
   const rosterError=null;
-  const [kickoffTimes,setKickoffTimes]=useState({}); // { teamName/abbr -> Date }
+  const [kickoffTimes,setKickoffTimes]=useState({});
+  const [lastUpdated,setLastUpdated]=useState(null); // { teamName/abbr -> Date }
   const [now,setNow]=useState(new Date());
 
 
@@ -229,12 +230,13 @@ export default function App() {
 
   // Subscribe to real-time updates from other users
   const lastSaveTime = useRef(0);
+  const pickerOpen = useRef(false); // tracks if picker modal is open
   useEffect(()=>{
     const sub=subscribeToState(remoteState=>{
-      // Only apply remote state if we haven't saved in the last 2 seconds
-      // to avoid overwriting our own just-saved state
-      if(Date.now() - lastSaveTime.current > 2000){
+      // Only apply remote state if we haven't saved in the last 5 seconds
+      if(Date.now() - lastSaveTime.current > 5000 && !pickerOpen.current){
         setState(remoteState);
+        setLastUpdated(new Date());
       }
     });
     return ()=>{ sub.unsubscribe(); };
@@ -248,6 +250,34 @@ export default function App() {
     const t=setInterval(()=>setNow(new Date()),60000);
     return ()=>clearInterval(t);
   },[]);
+
+  // Auto-refresh from Supabase every 30 seconds to catch new users/picks
+  useEffect(()=>{
+    if(dbLoading) return;
+    const t=setInterval(async()=>{
+      // Only refresh if we haven't saved recently (to avoid overwriting our own data)
+      if(Date.now() - lastSaveTime.current > 5000 && !pickerOpen.current){
+        const fresh=await loadLeagueState();
+        if(fresh){
+          setState(fresh);
+          setLastUpdated(new Date());
+        }
+      }
+    }, 30000);
+    return ()=>clearInterval(t);
+  },[dbLoading]);
+
+  // Manual refresh function
+  const refreshFromDB=async()=>{
+    const fresh=await loadLeagueState();
+    if(fresh){setState(fresh);setLastUpdated(new Date());notify("Data refreshed! ✅");}
+    else notify("Refresh failed","error");
+  };
+
+  // Set lastUpdated on initial load
+  useEffect(()=>{
+    if(!dbLoading) setLastUpdated(new Date());
+  },[dbLoading]);
 
   // Load kickoff times when week changes or user logs in
   useEffect(()=>{
@@ -816,9 +846,9 @@ export default function App() {
       setSuggestions(results);setNoResults(results.length===0);
     };
 
-    const openPicker=cat=>{setPickerCat(cat);setPickInput("");setSuggestions([]);setNoResults(false);setTimeout(()=>inputRef.current?.focus(),80);};
-    const confirmPick=key=>{makePick(uid,pickerCat.id,key);setPickerCat(null);setPickInput("");setSuggestions([]);setNoResults(false);};
-    const closePicker=()=>{setPickerCat(null);setPickInput("");setSuggestions([]);setNoResults(false);};
+    const openPicker=cat=>{pickerOpen.current=true;setPickerCat(cat);setPickInput("");setSuggestions([]);setNoResults(false);setTimeout(()=>inputRef.current?.focus(),80);};
+    const confirmPick=key=>{pickerOpen.current=false;makePick(uid,pickerCat.id,key);setPickerCat(null);setPickInput("");setSuggestions([]);setNoResults(false);};
+    const closePicker=()=>{pickerOpen.current=false;setPickerCat(null);setPickInput("");setSuggestions([]);setNoResults(false);};
 
     return(<div>
       <h2 className="view-title">My Picks <span className="week-badge">Week {state.currentWeek}</span></h2>
@@ -1468,6 +1498,7 @@ export default function App() {
           <div className="topbar-logo" onClick={()=>setView("admin")}>LAST STAND</div>
           <div className="topbar-right">
             {loggedInUser&&<span className="topbar-user"><strong>{loggedInUser.teamName}</strong></span>}
+            <button className="logout-btn" onClick={refreshFromDB} title={lastUpdated?"Updated: "+lastUpdated.toLocaleTimeString():""}>🔄</button>
             {adminAuthed&&<button className="admin-topbar-btn" onClick={()=>setView("admin")}>⚙️ Admin</button>}
             <button className="logout-btn" onClick={logout}>Sign Out</button>
           </div>
