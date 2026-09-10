@@ -240,14 +240,8 @@ export default function App() {
     return ()=>{ sub.unsubscribe(); };
   },[]);
 
-  // Save to Supabase whenever state changes
-  useEffect(()=>{
-    if(dbLoading) return;
-    lastSaveTime.current = Date.now();
-    saveLeagueState(state).then(success=>{
-      if(!success) console.error('Failed to save state');
-    });
-  },[state,dbLoading]);
+  // NOTE: Auto-save removed - we save explicitly in each action (makePick, register, etc.)
+  // to prevent stale state from being written back to Supabase
 
   // Tick clock every minute to re-check kickoff locks
   useEffect(()=>{
@@ -304,14 +298,20 @@ export default function App() {
   };
   const register=async(username,password,teamName)=>{
     if(!username.trim()||!password.trim()||!teamName.trim()){notify("All fields required","error");return;}
-    if(state.users.find(u=>u.username.toLowerCase()===username.toLowerCase())){notify("Username taken","error");return;}
-    const color=AVATAR_COLORS[state.users.length%AVATAR_COLORS.length];
+    // Always fetch the LATEST state from Supabase first to avoid overwriting other users
+    // who may have registered at the same time
+    notify("Creating account...","success");
+    const latestState = await loadLeagueState();
+    const baseState = latestState || state;
+    // Check username against latest state
+    if(baseState.users.find(u=>u.username.toLowerCase()===username.toLowerCase())){notify("Username taken","error");return;}
+    const color=AVATAR_COLORS[baseState.users.length%AVATAR_COLORS.length];
     const newUser={id:Date.now().toString(),username:username.trim(),passwordHash:hashPassword(password.trim()),teamName:teamName.trim(),avatarColor:color};
-    const newState={...state,users:[...state.users,newUser]};
+    const newState={...baseState,users:[...baseState.users,newUser]};
     setState(newState);
-    // Force immediate save so the user appears for everyone right away
+    // Force immediate save
     const success = await saveLeagueState(newState);
-    if(!success) notify("Warning: account may not have saved — please try again","error");
+    if(!success){notify("Warning: account may not have saved — please try again","error");return;}
     setLoggedInUser(newUser); setView("home"); notify(`Welcome, ${teamName}! 🏈`);
   };
   const logout=()=>{setLoggedInUser(null);setAdminAuthed(false);setView("login");};
@@ -324,14 +324,19 @@ export default function App() {
   const isEliminated=(userId,categoryId)=>state.eliminations?.[userId]?.[categoryId]===true;
   const isWeekLocked=(week)=>state.weekLocked?.[`w${week}`]===true;
 
-  const makePick=(userId,categoryId,pickLabel)=>{
+  const makePick=async(userId,categoryId,pickLabel)=>{
     const weekKey=`w${state.currentWeek}`;
     if(getUsedPicks(userId,categoryId).includes(pickLabel)){notify("Already used that pick!","error");return;}
-    setState(s=>({...s,picks:{...s.picks,[weekKey]:{...(s.picks[weekKey]||{}),[userId]:{...(s.picks[weekKey]?.[userId]||{}),[categoryId]:pickLabel}}}}));
+    // Fetch latest state to avoid overwriting other users' picks saved at same time
+    const latestState = await loadLeagueState();
+    const baseState = latestState || state;
+    const newState={...baseState,picks:{...baseState.picks,[weekKey]:{...(baseState.picks[weekKey]||{}),[userId]:{...(baseState.picks[weekKey]?.[userId]||{}),[categoryId]:pickLabel}}}};
+    setState(newState);
+    await saveLeagueState(newState);
     notify("Pick saved! ✅");
   };
 
-  const applyApprovedGrades=(weekNum,gradingData)=>{
+  const applyApprovedGrades=async(weekNum,gradingData)=>{
     const weekKey=`w${weekNum}`;
     const weekPicks=state.picks[weekKey]||{};
     const newResults={};
@@ -369,7 +374,9 @@ export default function App() {
       });
     });
 
-    setState(s=>({...s,eliminations:newElims,results:{...s.results,[weekKey]:newResults},weekLocked:{...s.weekLocked,[weekKey]:true},gradingResults:{...s.gradingResults,[weekKey]:gradingData}}));
+    const newState2={...state,eliminations:newElims,results:{...state.results,[weekKey]:newResults},weekLocked:{...state.weekLocked,[weekKey]:true},gradingResults:{...state.gradingResults,[weekKey]:gradingData}};
+    setState(newState2);
+    await saveLeagueState(newState2);
     notify("Week approved & published! 🏈");
   };
 
@@ -398,6 +405,75 @@ export default function App() {
       {user.teamName?.[0]?.toUpperCase()||user.username?.[0]?.toUpperCase()}
     </div>
   );
+
+  // ── ADMIN PICK ENTRY ─────────────────────────────────────────────────────────
+  const AdminPickEntry=({state,setState,CATEGORIES,notify})=>{
+    const [selUser,setSelUser]=useState("");
+    const [selCat,setSelCat]=useState("");
+    const [pickInput,setPickInput]=useState("");
+    const [suggestions,setSuggestions]=useState([]);
+
+    const cat=CATEGORIES.find(c=>c.id===selCat);
+
+    const handleSearch=val=>{
+      setPickInput(val);
+      if(!val||val.length<2||!cat){setSuggestions([]);return;}
+      if(cat.type==="team"){
+        setSuggestions(TEAM_LIST.filter(t=>t.name.toLowerCase().includes(val.toLowerCase())).slice(0,8).map(t=>({label:t.name,key:t.name})));
+      } else {
+        setSuggestions(allPlayers.filter(p=>p.name.toLowerCase().includes(val.toLowerCase())&&cat.positions.some(pos=>pos===p.pos)).slice(0,10).map(p=>({label:p.name,key:p.name,sub:`${p.pos} · ${p.teamAbbr}`})));
+      }
+    };
+
+    const savePick=async(pickLabel)=>{
+      if(!selUser||!selCat){notify("Select a user and category first","error");return;}
+      const weekKey=`w${state.currentWeek}`;
+      const latestState=await loadLeagueState();
+      const base=latestState||state;
+      const newState={...base,picks:{...base.picks,[weekKey]:{...(base.picks[weekKey]||{}),[selUser]:{...(base.picks[weekKey]?.[selUser]||{}),[selCat]:pickLabel}}}};
+      setState(newState);
+      await saveLeagueState(newState);
+      setPickInput("");setSuggestions([]);
+      notify(`Pick saved: ${pickLabel} ✅`);
+    };
+
+    const currentPick=selUser&&selCat?state.picks[`w${state.currentWeek}`]?.[selUser]?.[selCat]||"":""
+
+    return(<div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+        <select className="admin-input" value={selUser} onChange={e=>setSelUser(e.target.value)}>
+          <option value="">— Select Player —</option>
+          {state.users.map(u=><option key={u.id} value={u.id}>{u.teamName} (@{u.username})</option>)}
+        </select>
+        <select className="admin-input" value={selCat} onChange={e=>{setSelCat(e.target.value);setPickInput("");setSuggestions([]);}}>
+          <option value="">— Select Category —</option>
+          {CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+        </select>
+      </div>
+      {selUser&&selCat&&<div>
+        {currentPick&&<div style={{background:"rgba(60,255,138,.08)",border:"1px solid rgba(60,255,138,.3)",borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10}}>
+          Current pick: <strong>{currentPick}</strong>
+        </div>}
+        <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+          <span>🔍</span>
+          <input className="picker-search-input" placeholder={cat?.type==="team"?"Search NFL team…":"Search player…"} value={pickInput} onChange={e=>handleSearch(e.target.value)} autoCorrect="off" autoCapitalize="off"/>
+          {pickInput&&<button style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer"}} onClick={()=>{setPickInput("");setSuggestions([]);}}>✕</button>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {suggestions.map(s=>(
+            <button key={s.key} onClick={()=>savePick(s.key)} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:8,padding:"10px 14px",cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",color:"var(--text)"}}>
+              <div>
+                <div style={{fontWeight:600,fontSize:14}}>{s.label}</div>
+                {s.sub&&<div style={{fontSize:11,color:"var(--accent)"}}>{s.sub}</div>}
+              </div>
+              <span style={{color:"var(--muted)"}}>→</span>
+            </button>
+          ))}
+          {pickInput.length>=2&&suggestions.length===0&&<p style={{color:"var(--muted)",fontSize:13,padding:"10px 0"}}>No results found</p>}
+        </div>
+      </div>}
+    </div>);
+  };
 
   // ── USER ADMIN ROW ───────────────────────────────────────────────────────────
   const UserAdminRow=({user, onReset, onRemove, Avatar})=>{
@@ -909,7 +985,7 @@ export default function App() {
       setState(s=>({...s,users:s.users.map(u=>u.id===userId?{...u,passwordHash:hashPassword(newPassword.trim())}:u)}));
       notify("Password reset successfully!");
     };
-    const setResultManual=(weekNum,categoryId,successfulPicks)=>{
+    const setResultManual=async(weekNum,categoryId,successfulPicks)=>{
       const wk=`w${weekNum}`;const weekPicks=state.picks[wk]||{};
       const newElims=JSON.parse(JSON.stringify(state.eliminations||{}));
       state.users.forEach(user=>{
@@ -917,15 +993,17 @@ export default function App() {
         const pick=weekPicks[user.id]?.[categoryId];
         if(!pick||!successfulPicks.includes(pick)){if(!newElims[user.id])newElims[user.id]={};newElims[user.id][categoryId]=true;}
       });
-      setState(s=>({...s,eliminations:newElims,results:{...s.results,[wk]:{...(s.results[wk]||{}),[categoryId]:successfulPicks}}}));
+      const newStateR={...state,eliminations:newElims,results:{...state.results,[wk]:{...(state.results[wk]||{}),[categoryId]:successfulPicks}}};
+      setState(newStateR);
+      await saveLeagueState(newStateR);
       notify("Results saved!");
     };
     return(<div>
       <h2 className="view-title">Admin Panel</h2>
       <div className="admin-tabs">
-        {["grade","picks","results","roster","settings","users","week"].map(t=>(
+        {["grade","picks","results","entry","roster","settings","users","week"].map(t=>(
           <button key={t} className={`admin-tab ${adminTab===t?"active":""}`} onClick={()=>setAdminTab(t)}>
-            {t==="grade"?"⚡ Grade":t==="picks"?"👁 Picks":t==="results"?"📋 Results":t==="roster"?"🏈 Roster":t==="settings"?"⚙️ Rules":t==="users"?"👥 Users":"📅 Week"}
+            {t==="grade"?"⚡ Grade":t==="picks"?"👁 Picks":t==="results"?"📋 Results":t==="entry"?"✏️ Entry":t==="roster"?"🏈 Roster":t==="settings"?"⚙️ Rules":t==="users"?"👥 Users":"📅 Week"}
           </button>
         ))}
       </div>
@@ -1068,6 +1146,11 @@ export default function App() {
           ))}
           {!state.users.length&&<p className="empty-msg">No users yet</p>}
         </div>
+      </div>}
+      {adminTab==="entry"&&<div>
+        <h3 className="section-title">✏️ Admin Pick Entry</h3>
+        <p style={{color:"var(--muted)",fontSize:13,marginBottom:16}}>Enter or override picks for any user, bypassing all locks. Use for users who couldn't pick due to technical issues.</p>
+        <AdminPickEntry state={state} setState={setState} CATEGORIES={CATEGORIES} notify={notify}/>
       </div>}
       {adminTab==="week"&&<div>
         <h3 className="section-title">Week Management</h3>
