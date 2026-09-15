@@ -1186,9 +1186,25 @@ export default function App() {
       {adminTab==="week"&&<div>
         <h3 className="section-title">Week Management</h3>
         <div className="week-controls">
-          <button className="week-btn" onClick={()=>setState(s=>({...s,currentWeek:Math.max(1,s.currentWeek-1)}))}>← Prev</button>
+          <button className="week-btn" onClick={async()=>{
+            if(!window.confirm("Go back to Week "+(state.currentWeek-1)+"? Make sure you know what you're doing.")) return;
+            const ns={...state,currentWeek:Math.max(1,state.currentWeek-1)};
+            setState(ns); await saveLeagueState(ns);
+          }}>← Prev</button>
           <span className="week-display">Week {state.currentWeek}</span>
-          <button className="week-btn" onClick={()=>setState(s=>({...s,currentWeek:s.currentWeek+1}))}>Next →</button>
+          <button className="week-btn" style={{background:"var(--accent)",color:"#000",fontWeight:700}} onClick={async()=>{
+            const nextWeek=state.currentWeek+1;
+            const weekGraded=state.gradingResults?.[`w${state.currentWeek}`];
+            if(!weekGraded){
+              if(!window.confirm("⚠️ Week "+state.currentWeek+" has NOT been graded yet!\n\nAre you sure you want to advance to Week "+nextWeek+" without grading? Players will lose their Week "+state.currentWeek+" results.\n\nClick OK to advance anyway, or Cancel to grade first.")) return;
+            } else {
+              if(!window.confirm("Advance everyone to Week "+nextWeek+"?\n\nAll players will be moved to Week "+nextWeek+" picks.\n\nMake sure Week "+state.currentWeek+" is fully graded before doing this.")) return;
+            }
+            const ns={...state,currentWeek:nextWeek};
+            setState(ns);
+            await saveLeagueState(ns);
+            notify("Advanced to Week "+nextWeek+"! 🏈");
+          }}>Advance to Week {state.currentWeek+1} →</button>
         </div>
         <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:16}}>
           <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>🔒 Pick Lock — Week {state.currentWeek}</h4>
