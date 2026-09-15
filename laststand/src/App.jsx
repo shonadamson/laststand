@@ -927,6 +927,70 @@ export default function App() {
     </div>);
   };
 
+  const HistoryView=()=>{
+    const uid=loggedInUser?.id;
+    const currentUser=state.users.find(u=>u.id===uid);
+    if(!currentUser) return null;
+    // Get all weeks that have picks
+    const allWeeks=Object.keys(state.picks).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)));
+    if(!allWeeks.length) return(
+      <div>
+        <h2 className="view-title">Pick History</h2>
+        <div style={{textAlign:"center",padding:"40px 20px",color:"var(--muted)"}}>No picks yet!</div>
+      </div>
+    );
+    return(<div>
+      <h2 className="view-title">Pick History</h2>
+      {allWeeks.map(weekKey=>{
+        const weekNum=weekKey.slice(1);
+        const weekPicks=state.picks[weekKey]?.[uid]||{};
+        const weekResults=state.results?.[weekKey]||{};
+        const weekGraded=state.gradingResults?.[weekKey]||state.results?.[weekKey];
+        const hasPicks=Object.keys(weekPicks).length>0;
+        return(
+          <div key={weekKey} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",marginBottom:12,overflow:"hidden"}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"var(--surface2)"}}>
+              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:1}}>Week {weekNum}</span>
+              {weekGraded?<span style={{fontSize:11,color:"var(--success)",background:"rgba(60,255,138,.1)",padding:"3px 8px",borderRadius:10}}>✅ Graded</span>
+                :<span style={{fontSize:11,color:"var(--warn)",background:"rgba(255,179,71,.1)",padding:"3px 8px",borderRadius:10}}>⏳ Pending</span>}
+            </div>
+            {!hasPicks
+              ?<div style={{padding:"14px 16px",color:"var(--muted)",fontSize:13}}>No picks submitted for this week</div>
+              :<div>
+                {CATEGORIES.map(cat=>{
+                  const pick=weekPicks[cat.id];
+                  const elim=isEliminated(uid,cat.id);
+                  const weekSuccesses=weekResults[cat.id]||[];
+                  const passed=pick&&weekSuccesses.includes(pick);
+                  const failed=pick&&weekGraded&&weekSuccesses.length>0&&!weekSuccesses.includes(pick);
+                  return(
+                    <div key={cat.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:18}}>{cat.icon}</span>
+                        <div>
+                          <div style={{fontSize:11,color:"var(--muted)"}}>{cat.name}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:pick?"var(--text)":"var(--muted)"}}>
+                            {pick||<em style={{fontWeight:400}}>No pick</em>}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        {passed&&<span style={{color:"var(--success)",fontSize:13,fontWeight:700}}>✅ PASS</span>}
+                        {failed&&<span style={{color:"var(--accent2)",fontSize:13,fontWeight:700}}>❌ FAIL</span>}
+                        {!weekGraded&&pick&&<span style={{color:"var(--muted)",fontSize:12}}>⏳</span>}
+                        {!pick&&<span style={{color:"var(--muted)",fontSize:12}}>—</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            }
+          </div>
+        );
+      })}
+    </div>);
+  };
+
   const StandingsView=()=>{
     const standings=getStandings();const weekKey=`w${state.currentWeek}`;const locked=isWeekLocked(state.currentWeek);
     const grading=state.gradingResults?.[weekKey];
@@ -1245,7 +1309,7 @@ export default function App() {
       );
     }
   };
-  const VIEWS={home:<SafeView component={HomeView}/>,picks:<SafeView component={PicksView}/>,standings:<SafeView component={StandingsView}/>,categories:<SafeView component={CategoriesView}/>,admin:<SafeView component={AdminView}/>};
+  const VIEWS={home:<SafeView component={HomeView}/>,picks:<SafeView component={PicksView}/>,history:<SafeView component={HistoryView}/>,standings:<SafeView component={StandingsView}/>,categories:<SafeView component={CategoriesView}/>,admin:<SafeView component={AdminView}/>};
   const AUTH_VIEWS={login:<LoginView/>,register:<RegisterView/>};
   const isAuth=view==="login"||view==="register";
 
@@ -1529,7 +1593,7 @@ export default function App() {
         :(<>
           <div className="main-content">{VIEWS[view]}</div>
           <nav className="bottom-nav">
-            {[{id:"home",icon:"🏠",label:"Home"},{id:"picks",icon:"📋",label:"Picks"},{id:"standings",icon:"🏆",label:"Standings"},{id:"categories",icon:"📊",label:"Categories"}].map(n=>(
+            {[{id:"home",icon:"🏠",label:"Home"},{id:"picks",icon:"📋",label:"Picks"},{id:"history",icon:"📜",label:"History"},{id:"standings",icon:"🏆",label:"Standings"},{id:"categories",icon:"📊",label:"Categories"}].map(n=>(
               <button key={n.id} className={`nav-item ${view===n.id?"active":""}`} onClick={()=>setView(n.id)}>
                 <span className="nav-item-icon">{n.icon}</span><span>{n.label}</span>
               </button>
