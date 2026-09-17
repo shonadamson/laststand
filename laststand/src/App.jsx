@@ -994,13 +994,19 @@ export default function App() {
   const WeeklyPicksView=()=>{
     const weekKey=`w${state.currentWeek}`;
     // Show picks after noon Sunday, or if week is graded
+    // Once revealed, picks stay visible forever for that week
     const graded=!!state.gradingResults?.[weekKey];
+    const isCurrentWeek=weekKey===`w${state.currentWeek}`;
     const picksVisible=(()=>{
-      if(graded) return true;
+      if(graded) return true; // always show if graded
+      if(!isCurrentWeek) return true; // always show past weeks
       const n=new Date();
       const day=n.getDay(); // 0=Sun
       const hour=n.getHours();
-      return day===0&&hour>=12 || day>0;
+      // Current week: hide until Sunday noon
+      if(day===0) return hour>=12;
+      if(day>=1) return true; // Mon onwards always show
+      return false; // Sat before noon still hidden
     })();
 
     if(!picksVisible) return(
