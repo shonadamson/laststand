@@ -991,6 +991,88 @@ export default function App() {
     </div>);
   };
 
+  const WeeklyPicksView=()=>{
+    const weekKey=`w${state.currentWeek}`;
+    // Show picks after noon Sunday, or if week is graded
+    const graded=!!state.gradingResults?.[weekKey];
+    const picksVisible=(()=>{
+      if(graded) return true;
+      const n=new Date();
+      const day=n.getDay(); // 0=Sun
+      const hour=n.getHours();
+      return day===0&&hour>=12 || day>0;
+    })();
+
+    if(!picksVisible) return(
+      <div>
+        <h2 className="view-title">Week {state.currentWeek} Picks</h2>
+        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:"40px 20px",textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+          <p style={{fontWeight:600,marginBottom:6}}>Picks are hidden until Sunday at noon</p>
+          <p style={{color:"var(--muted)",fontSize:13}}>Check back Sunday to see everyone's picks!</p>
+        </div>
+      </div>
+    );
+
+    return(<div>
+      <h2 className="view-title">Week {state.currentWeek} Picks</h2>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead>
+            <tr>
+              <th style={{textAlign:"left",padding:"8px 10px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",fontWeight:700,position:"sticky",left:0,zIndex:2,minWidth:100}}>Player</th>
+              {CATEGORIES.map(cat=>(
+                <th key={cat.id} style={{padding:"6px 8px",background:"var(--surface2)",borderBottom:"2px solid var(--border)",textAlign:"center",minWidth:80,fontWeight:600}}>
+                  {cat.icon}<br/><span style={{fontSize:10,color:"var(--muted)",fontWeight:400}}>{cat.name.split("/")[0].trim()}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {state.users.map((u,i)=>{
+              const userPicks=state.picks[weekKey]?.[u.id]||{};
+              const weekResults=state.results?.[weekKey]||{};
+              return(
+                <tr key={u.id} style={{background:i%2===0?"var(--surface)":"var(--surface2)"}}>
+                  <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid var(--border)",position:"sticky",left:0,background:i%2===0?"var(--surface)":"var(--surface2)",zIndex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div style={{width:22,height:22,borderRadius:"50%",background:u.avatarColor||"var(--accent)",color:"#000",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{u.teamName?.[0]}</div>
+                      <span style={{fontSize:11}}>{u.teamName}</span>
+                    </div>
+                  </td>
+                  {CATEGORIES.map(cat=>{
+                    const elim=isEliminated(u.id,cat.id);
+                    const pick=userPicks[cat.id];
+                    const weekSuccesses=weekResults[cat.id]||[];
+                    const passed=pick&&weekSuccesses.includes(pick)&&graded;
+                    const failed=pick&&graded&&weekSuccesses.length>0&&!weekSuccesses.includes(pick);
+                    return(
+                      <td key={cat.id} style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid var(--border)",borderLeft:"1px solid var(--border)"}}>
+                        {elim
+                          ?<span style={{color:"var(--accent2)",fontSize:11}}>💀</span>
+                          :passed
+                            ?<span style={{color:"var(--success)",fontSize:10,display:"block",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={pick}>✅ {pick}</span>
+                            :failed
+                              ?<span style={{color:"var(--accent2)",fontSize:10,display:"block",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={pick}>❌ {pick}</span>
+                              :pick
+                                ?<span style={{color:"var(--text)",fontSize:10,display:"block",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={pick}>{pick}</span>
+                                :<span style={{color:"var(--muted)",fontSize:13,fontWeight:700}}>—</span>
+                        }
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{marginTop:10,padding:"8px 14px",background:"var(--surface2)",borderRadius:8,fontSize:11,color:"var(--muted)"}}>
+        ✅ = pass &nbsp;|&nbsp; ❌ = fail &nbsp;|&nbsp; — = no pick &nbsp;|&nbsp; 💀 = eliminated
+      </div>
+    </div>);
+  };
+
   const StandingsView=()=>{
     const standings=getStandings();const weekKey=`w${state.currentWeek}`;const locked=isWeekLocked(state.currentWeek);
     const grading=state.gradingResults?.[weekKey];
@@ -1007,25 +1089,7 @@ export default function App() {
     return(<div>
       <h2 className="view-title">Standings</h2>
       {!picksVisible&&<div className="locked-notice">🔒 Everyone's picks will be visible Sunday at noon</div>}
-      {picksVisible&&!grading&&(<div style={{marginBottom:20}}>
-        <h3 className="section-title" style={{marginBottom:14}}>Week {state.currentWeek} Picks</h3>
-        {CATEGORIES.map(cat=>{
-          return(<div key={cat.id} className="result-reveal-row" style={{marginBottom:8}}>
-            <div className="result-cat">{cat.icon} {cat.name}</div>
-            <div className="reveal-picks">
-              {state.users.map(u=>{
-                const pick=state.picks[weekKey]?.[u.id]?.[cat.id];
-                const elim=isEliminated(u.id,cat.id);
-                return(<div key={u.id} className={`reveal-pick-item ${elim?"elim-item":""}`}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:u.avatarColor||"var(--accent)",color:"#000",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{u.teamName?.[0]}</div>
-                  <div className="reveal-pick-info"><span className="reveal-team">{u.teamName}</span><span className="reveal-pick">{pick||<em>No pick</em>}</span></div>
-                  <span className="reveal-status">{elim?"💀":"⏳"}</span>
-                </div>);
-              })}
-            </div>
-          </div>);
-        })}
-      </div>)}
+
       <div className="standings-list">
         {standings.map((u,i)=>(<div key={u.id} className={`standing-row ${i===0?"rank-1":""}`}>
           <div className="rank-num">{i===0?"🥇":`#${i+1}`}</div>
@@ -1338,7 +1402,7 @@ export default function App() {
       );
     }
   };
-  const VIEWS={home:<SafeView component={HomeView}/>,picks:<SafeView component={PicksView}/>,history:<SafeView component={HistoryView}/>,standings:<SafeView component={StandingsView}/>,categories:<SafeView component={CategoriesView}/>,admin:<SafeView component={AdminView}/>};
+  const VIEWS={home:<SafeView component={HomeView}/>,picks:<SafeView component={PicksView}/>,weeklypicks:<SafeView component={WeeklyPicksView}/>,history:<SafeView component={HistoryView}/>,standings:<SafeView component={StandingsView}/>,categories:<SafeView component={CategoriesView}/>,admin:<SafeView component={AdminView}/>};
   const AUTH_VIEWS={login:<LoginView/>,register:<RegisterView/>};
   const isAuth=view==="login"||view==="register";
 
@@ -1622,7 +1686,7 @@ export default function App() {
         :(<>
           <div className="main-content">{VIEWS[view]}</div>
           <nav className="bottom-nav">
-            {[{id:"home",icon:"🏠",label:"Home"},{id:"picks",icon:"📋",label:"Picks"},{id:"history",icon:"📜",label:"History"},{id:"standings",icon:"🏆",label:"Standings"},{id:"categories",icon:"📊",label:"Categories"}].map(n=>(
+            {[{id:"home",icon:"🏠",label:"Home"},{id:"picks",icon:"📋",label:"Picks"},{id:"weeklypicks",icon:"👀",label:"All Picks"},{id:"standings",icon:"🏆",label:"Standings"},{id:"history",icon:"📜",label:"History"}].map(n=>(
               <button key={n.id} className={`nav-item ${view===n.id?"active":""}`} onClick={()=>setView(n.id)}>
                 <span className="nav-item-icon">{n.icon}</span><span>{n.label}</span>
               </button>
