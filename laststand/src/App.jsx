@@ -994,9 +994,38 @@ export default function App() {
   const StandingsView=()=>{
     const standings=getStandings();const weekKey=`w${state.currentWeek}`;const locked=isWeekLocked(state.currentWeek);
     const grading=state.gradingResults?.[weekKey];
+    // Show picks after noon Sunday of the current week
+    const picksVisible=(()=>{
+      if(locked) return true; // always show if graded
+      const n=new Date();
+      // Sunday = day 0, noon = 12:00
+      const day=n.getDay(); // 0=Sun
+      const hour=n.getHours();
+      // Show from Sunday noon onwards through the week until next picks window
+      return day===0&&hour>=12 || day>0;
+    })();
     return(<div>
       <h2 className="view-title">Standings</h2>
-      {!locked&&<div className="locked-notice">🔒 Picks hidden until admin publishes results</div>}
+      {!picksVisible&&<div className="locked-notice">🔒 Everyone's picks will be visible Sunday at noon</div>}
+      {picksVisible&&!grading&&(<div style={{marginBottom:20}}>
+        <h3 className="section-title" style={{marginBottom:14}}>Week {state.currentWeek} Picks</h3>
+        {CATEGORIES.map(cat=>{
+          return(<div key={cat.id} className="result-reveal-row" style={{marginBottom:8}}>
+            <div className="result-cat">{cat.icon} {cat.name}</div>
+            <div className="reveal-picks">
+              {state.users.map(u=>{
+                const pick=state.picks[weekKey]?.[u.id]?.[cat.id];
+                const elim=isEliminated(u.id,cat.id);
+                return(<div key={u.id} className={`reveal-pick-item ${elim?"elim-item":""}`}>
+                  <div style={{width:24,height:24,borderRadius:"50%",background:u.avatarColor||"var(--accent)",color:"#000",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{u.teamName?.[0]}</div>
+                  <div className="reveal-pick-info"><span className="reveal-team">{u.teamName}</span><span className="reveal-pick">{pick||<em>No pick</em>}</span></div>
+                  <span className="reveal-status">{elim?"💀":"⏳"}</span>
+                </div>);
+              })}
+            </div>
+          </div>);
+        })}
+      </div>)}
       <div className="standings-list">
         {standings.map((u,i)=>(<div key={u.id} className={`standing-row ${i===0?"rank-1":""}`}>
           <div className="rank-num">{i===0?"🥇":`#${i+1}`}</div>
@@ -1010,7 +1039,7 @@ export default function App() {
         </div>))}
         {!standings.length&&<p className="empty-msg">No players yet!</p>}
       </div>
-      {locked&&grading&&(<div style={{marginTop:28}}>
+      {picksVisible&&grading&&(<div style={{marginTop:28}}>
         <h3 className="section-title" style={{marginBottom:14}}>Week {state.currentWeek} Results</h3>
         {CATEGORIES.map(cat=>{
           const catGrades=grading[cat.id]||{};const successPicks=state.results[weekKey]?.[cat.id]||[];
