@@ -65,7 +65,7 @@ const AVATAR_COLORS = ["#e8ff3c","#3cff8a","#ff6b6b","#6bc5ff","#ff9f43","#a29bf
 
 const initialState = {
   users:[], currentWeek:1,
-  picks:{}, results:{}, eliminations:{}, weekLocked:{},
+  picks:{}, results:{}, eliminations:{}, weekLocked:{}, picksRevealed:{},
   gradingResults:{}, thresholds:DEFAULT_THRESHOLDS, customPlayers:[],
 };
 
@@ -993,20 +993,16 @@ export default function App() {
 
   const WeeklyPicksView=()=>{
     const weekKey=`w${state.currentWeek}`;
-    // Show picks after noon Sunday, or if week is graded
-    // Once revealed, picks stay visible forever for that week
+    // Show picks logic:
+    // - Past weeks: always visible
+    // - Current week: hidden until admin reveals OR week is graded
     const graded=!!state.gradingResults?.[weekKey];
     const isCurrentWeek=weekKey===`w${state.currentWeek}`;
+    const adminRevealed=!!state.picksRevealed?.[weekKey];
     const picksVisible=(()=>{
-      if(graded) return true; // always show if graded
-      if(!isCurrentWeek) return true; // always show past weeks
-      const n=new Date();
-      const day=n.getDay(); // 0=Sun
-      const hour=n.getHours();
-      // Current week: hide until Sunday noon
-      if(day===0) return hour>=12;
-      if(day>=1) return true; // Mon onwards always show
-      return false; // Sat before noon still hidden
+      if(graded) return true;          // always show if graded
+      if(!isCurrentWeek) return true;  // always show past weeks
+      return adminRevealed;            // current week: only if admin revealed
     })();
 
     if(!picksVisible) return(
@@ -1014,8 +1010,8 @@ export default function App() {
         <h2 className="view-title">Week {state.currentWeek} Picks</h2>
         <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:"40px 20px",textAlign:"center"}}>
           <div style={{fontSize:36,marginBottom:12}}>🔒</div>
-          <p style={{fontWeight:600,marginBottom:6}}>Picks are hidden until Sunday at noon</p>
-          <p style={{color:"var(--muted)",fontSize:13}}>Check back Sunday to see everyone's picks!</p>
+          <p style={{fontWeight:600,marginBottom:6}}>Picks are hidden for now</p>
+          <p style={{color:"var(--muted)",fontSize:13}}>The admin will reveal everyone's picks on Sunday!</p>
         </div>
       </div>
     );
@@ -1368,6 +1364,23 @@ export default function App() {
             await saveLeagueState(ns);
             notify("Advanced to Week "+nextWeek+"! 🏈");
           }}>Advance to Week {state.currentWeek+1} →</button>
+        </div>
+        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:16}}>
+          <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>👀 Reveal Picks — Week {state.currentWeek}</h4>
+          <p style={{fontSize:12,color:"var(--muted)",marginBottom:14}}>Control when everyone can see each other's picks for this week.</p>
+          {state.picksRevealed?.[`w${state.currentWeek}`]
+            ?<div>
+              <div style={{background:"rgba(60,255,138,.1)",border:"1px solid var(--success)",borderRadius:8,padding:"10px 14px",fontSize:13,color:"var(--success)",marginBottom:10}}>✅ Week {state.currentWeek} picks are VISIBLE to all players</div>
+              <button style={{background:"none",border:"1px solid var(--border)",color:"var(--muted)",padding:"10px 18px",borderRadius:8,cursor:"pointer",fontSize:13,width:"100%"}}
+                onClick={async()=>{const ns={...state,picksRevealed:{...state.picksRevealed,[`w${state.currentWeek}`]:false}};setState(ns);await saveLeagueState(ns);}}>
+                🔒 Hide Picks Again
+              </button>
+            </div>
+            :<button style={{background:"var(--accent)",color:"#000",border:"none",padding:12,borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14,width:"100%",marginBottom:16}}
+              onClick={async()=>{const ns={...state,picksRevealed:{...state.picksRevealed,[`w${state.currentWeek}`]:true}};setState(ns);await saveLeagueState(ns);notify("Picks revealed! 👀");}}>
+              👀 Reveal Week {state.currentWeek} Picks to Everyone
+            </button>
+          }
         </div>
         <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:16}}>
           <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>🔒 Pick Lock — Week {state.currentWeek}</h4>
