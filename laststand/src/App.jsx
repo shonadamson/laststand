@@ -1170,10 +1170,14 @@ export default function App() {
       notify(`${adminNewTn} added! They can now log in.`);
     };
 
-    const adminResetPassword=(userId, newPassword)=>{
+    const adminResetPassword=async(userId, newPassword)=>{
       if(!newPassword.trim()||newPassword.trim().length<4){notify("Password must be 4+ characters","error");return;}
-      setState(s=>({...s,users:s.users.map(u=>u.id===userId?{...u,passwordHash:hashPassword(newPassword.trim())}:u)}));
-      notify("Password reset successfully!");
+      const latestState=await loadLeagueState();
+      const base=latestState||state;
+      const newState={...base,users:base.users.map(u=>u.id===userId?{...u,passwordHash:hashPassword(newPassword.trim())}:u)};
+      setState(newState);
+      await saveLeagueState(newState);
+      notify("Password reset successfully! ✅");
     };
     const setResultManual=async(weekNum,categoryId,successfulPicks)=>{
       const wk=`w${weekNum}`;const weekPicks=state.picks[wk]||{};
