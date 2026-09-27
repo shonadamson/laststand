@@ -451,7 +451,12 @@ export default function App() {
       if(cat.type==="team"){
         setSuggestions(TEAM_LIST.filter(t=>t.name.toLowerCase().includes(val.toLowerCase())).slice(0,8).map(t=>({label:t.name,key:t.name})));
       } else {
-        setSuggestions(allPlayers.filter(p=>p.name.toLowerCase().includes(val.toLowerCase())&&cat.positions.some(pos=>pos===p.pos)).slice(0,10).map(p=>({label:p.name,key:p.name,sub:`${p.pos} · ${p.teamAbbr}`})));
+        const isDef=cat.positions.includes("DEF_PLAYER");
+        setSuggestions(allPlayers.filter(p=>{
+          if(!p.name.toLowerCase().includes(val.toLowerCase())) return false;
+          if(isDef) return DEF_POSITIONS.includes(p.pos);
+          return cat.positions.some(pos=>pos===p.pos);
+        }).slice(0,10).map(p=>({label:p.name,key:p.name,sub:`${p.pos} · ${p.teamAbbr}`})));
       }
     };
 
