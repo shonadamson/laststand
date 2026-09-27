@@ -546,11 +546,15 @@ export default function App() {
     const [team,setTeam]=useState("KC");
     const positions=["QB","RB","WR","TE","K","DE","DT","LB","CB","S","OLB","MLB","ILB","FS","SS"];
     const teamAbbrs=["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WSH"];
-    const add=()=>{
+    const add=async()=>{
       if(!name.trim()){notify("Player name required","error");return;}
       const existing=[...NFL_ROSTERS,...(state.customPlayers||[])].find(p=>p.name.toLowerCase()===name.trim().toLowerCase());
       if(existing){notify("Player already exists in roster","error");return;}
-      setState(s=>({...s,customPlayers:[...(s.customPlayers||[]),{name:name.trim(),pos,teamAbbr:team}]}));
+      const latestState=await loadLeagueState();
+      const base=latestState||state;
+      const newState={...base,customPlayers:[...(base.customPlayers||[]),{name:name.trim(),pos,teamAbbr:team}]};
+      setState(newState);
+      await saveLeagueState(newState);
       setName(""); notify(`${name.trim()} added! ✅`);
     };
     return(
@@ -1297,7 +1301,7 @@ export default function App() {
                 <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
                 <div style={{fontSize:11,color:"var(--accent)"}}>{p.pos} · {p.teamAbbr}</div>
               </div>
-              <button className="remove-btn" onClick={()=>setState(s=>({...s,customPlayers:s.customPlayers.filter((_,j)=>j!==i)}))}>✕</button>
+              <button className="remove-btn" onClick={async()=>{const latestState=await loadLeagueState();const base=latestState||state;const ns={...base,customPlayers:base.customPlayers.filter((_,j)=>j!==i)};setState(ns);await saveLeagueState(ns);}}>✕</button>
             </div>
           ))}
         </div>
