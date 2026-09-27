@@ -1319,15 +1319,15 @@ export default function App() {
               {cat.fields.map(field=>(<div key={field.key} className="settings-field-row">
                 <span className="settings-field-label">{field.label}</span>
                 <div className="settings-field-controls">
-                  <button className="thresh-btn" onClick={()=>setState(s=>({...s,thresholds:{...s.thresholds,[cat.id]:{...t,[field.key]:Math.max(field.min,(t[field.key]??0)-1)}}}))}>−</button>
-                  <input type="number" className="thresh-input" value={t[field.key]??0} min={field.min} max={field.max} onChange={e=>{const val=Math.min(field.max,Math.max(field.min,parseInt(e.target.value)||0));setState(s=>({...s,thresholds:{...s.thresholds,[cat.id]:{...t,[field.key]:val}}}))} }/>
-                  <button className="thresh-btn" onClick={()=>setState(s=>({...s,thresholds:{...s.thresholds,[cat.id]:{...t,[field.key]:Math.min(field.max,(t[field.key]??0)+1)}}}))}>+</button>
+                  <button className="thresh-btn" onClick={async()=>{const ns={...state,thresholds:{...state.thresholds,[cat.id]:{...t,[field.key]:Math.max(field.min,(t[field.key]??0)-1)}}};setState(ns);await saveLeagueState(ns);}}>−</button>
+                  <input type="number" className="thresh-input" value={t[field.key]??0} min={field.min} max={field.max} onChange={async e=>{const val=Math.min(field.max,Math.max(field.min,parseInt(e.target.value)||0));const ns={...state,thresholds:{...state.thresholds,[cat.id]:{...t,[field.key]:val}}};setState(ns);await saveLeagueState(ns);}}/>
+                  <button className="thresh-btn" onClick={async()=>{const ns={...state,thresholds:{...state.thresholds,[cat.id]:{...t,[field.key]:Math.min(field.max,(t[field.key]??0)+1)}}};setState(ns);await saveLeagueState(ns);}}>+</button>
                 </div>
               </div>))}
             </div>);
           })}
         </div>
-        <button className="reset-thresholds-btn" onClick={()=>{if(window.confirm("Reset all thresholds to defaults?"))setState(s=>({...s,thresholds:DEFAULT_THRESHOLDS}));}}>↩ Reset to Defaults</button>
+        <button className="reset-thresholds-btn" onClick={async()=>{if(window.confirm("Reset all thresholds to defaults?")){const ns={...state,thresholds:DEFAULT_THRESHOLDS};setState(ns);await saveLeagueState(ns);}}}>↩ Reset to Defaults</button>
       </div>}
       {adminTab==="users"&&<div>
         <h3 className="section-title">Add User</h3>
@@ -1397,12 +1397,12 @@ export default function App() {
             ?<div>
               <div style={{background:"rgba(60,255,138,.1)",border:"1px solid var(--success)",borderRadius:8,padding:"10px 14px",fontSize:13,color:"var(--success)",marginBottom:10}}>✅ Week {state.currentWeek} picks are LOCKED</div>
               <button style={{background:"none",border:"1px solid var(--accent2)",color:"var(--accent2)",padding:"10px 18px",borderRadius:8,cursor:"pointer",fontSize:13,width:"100%"}}
-                onClick={()=>{if(window.confirm("Unlock picks for Week "+state.currentWeek+"?"))setState(s=>({...s,weekLocked:{...s.weekLocked,[`w${state.currentWeek}`]:false}}))}}>
+                onClick={async()=>{if(window.confirm("Unlock picks for Week "+state.currentWeek+"?")){const ns={...state,weekLocked:{...state.weekLocked,[`w${state.currentWeek}`]:false}};setState(ns);await saveLeagueState(ns);}}}>
                 🔓 Unlock Week {state.currentWeek} Picks
               </button>
             </div>
             :<button style={{background:"var(--accent)",color:"#000",border:"none",padding:12,borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14,width:"100%"}}
-              onClick={()=>{if(window.confirm("Lock all picks for Week "+state.currentWeek+"? Players cannot change picks after this."))setState(s=>({...s,weekLocked:{...s.weekLocked,[`w${state.currentWeek}`]:true}}))}}>
+              onClick={async()=>{if(window.confirm("Lock all picks for Week "+state.currentWeek+"? Players cannot change picks after this.")){const ns={...state,weekLocked:{...state.weekLocked,[`w${state.currentWeek}`]:true}};setState(ns);await saveLeagueState(ns);}}}>
               🔒 Lock All Week {state.currentWeek} Picks Now
             </button>
           }
