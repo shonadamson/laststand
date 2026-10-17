@@ -1148,7 +1148,7 @@ export default function App() {
     </div>
   </div>);
 
-  const RestorePlayerForm=({state,setState,notify,CATEGORIES,saveLeagueState,loadLeagueState})=>{
+  const RestorePlayerForm=({state,setState,notify,CATEGORIES})=>{
     const [selUser,setSelUser]=React.useState("");
     const [selCat,setSelCat]=React.useState("");
     const eliminated=selUser?CATEGORIES.filter(cat=>state.eliminations?.[selUser]?.[cat.id]===true):[];
@@ -1385,7 +1385,7 @@ export default function App() {
         <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:20}}>
           <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>♻️ Restore Player to Category</h4>
           <p style={{fontSize:12,color:"var(--muted)",marginBottom:14}}>Use this to fix a grading mistake — removes the elimination so the player can pick again.</p>
-          <RestorePlayerForm state={state} setState={setState} notify={notify} CATEGORIES={CATEGORIES} saveLeagueState={saveLeagueState} loadLeagueState={loadLeagueState}/>
+          <RestorePlayerForm state={state} setState={setState} notify={notify} CATEGORIES={CATEGORIES}/>
         </div>
       </div>}
       {adminTab==="entry"&&<div>
