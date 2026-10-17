@@ -451,12 +451,7 @@ export default function App() {
       if(cat.type==="team"){
         setSuggestions(TEAM_LIST.filter(t=>t.name.toLowerCase().includes(val.toLowerCase())).slice(0,8).map(t=>({label:t.name,key:t.name})));
       } else {
-        const isDef=cat.positions.includes("DEF_PLAYER");
-        setSuggestions(allPlayers.filter(p=>{
-          if(!p.name.toLowerCase().includes(val.toLowerCase())) return false;
-          if(isDef) return DEF_POSITIONS.includes(p.pos);
-          return cat.positions.some(pos=>pos===p.pos);
-        }).slice(0,10).map(p=>({label:p.name,key:p.name,sub:`${p.pos} · ${p.teamAbbr}`})));
+        setSuggestions(allPlayers.filter(p=>p.name.toLowerCase().includes(val.toLowerCase())&&cat.positions.some(pos=>pos===p.pos)).slice(0,10).map(p=>({label:p.name,key:p.name,sub:`${p.pos} · ${p.teamAbbr}`})));
       }
     };
 
@@ -551,15 +546,11 @@ export default function App() {
     const [team,setTeam]=useState("KC");
     const positions=["QB","RB","WR","TE","K","DE","DT","LB","CB","S","OLB","MLB","ILB","FS","SS"];
     const teamAbbrs=["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SF","SEA","TB","TEN","WSH"];
-    const add=async()=>{
+    const add=()=>{
       if(!name.trim()){notify("Player name required","error");return;}
       const existing=[...NFL_ROSTERS,...(state.customPlayers||[])].find(p=>p.name.toLowerCase()===name.trim().toLowerCase());
       if(existing){notify("Player already exists in roster","error");return;}
-      const latestState=await loadLeagueState();
-      const base=latestState||state;
-      const newState={...base,customPlayers:[...(base.customPlayers||[]),{name:name.trim(),pos,teamAbbr:team}]};
-      setState(newState);
-      await saveLeagueState(newState);
+      setState(s=>({...s,customPlayers:[...(s.customPlayers||[]),{name:name.trim(),pos,teamAbbr:team}]}));
       setName(""); notify(`${name.trim()} added! ✅`);
     };
     return(
@@ -1157,6 +1148,48 @@ export default function App() {
     </div>
   </div>);
 
+  const RestorePlayerForm=({state,setState,notify,CATEGORIES,saveLeagueState,loadLeagueState})=>{
+    const [selUser,setSelUser]=React.useState("");
+    const [selCat,setSelCat]=React.useState("");
+    const eliminated=selUser?CATEGORIES.filter(cat=>state.eliminations?.[selUser]?.[cat.id]===true):[];
+    const restore=async()=>{
+      if(!selUser||!selCat){notify("Select a player and category","error");return;}
+      const latestState=await loadLeagueState();
+      const base=latestState||state;
+      const newElims=JSON.parse(JSON.stringify(base.eliminations||{}));
+      if(newElims[selUser]) delete newElims[selUser][selCat];
+      const ns={...base,eliminations:newElims};
+      setState(ns);
+      await saveLeagueState(ns);
+      const userName=base.users.find(u=>u.id===selUser)?.teamName||selUser;
+      const catName=CATEGORIES.find(c=>c.id===selCat)?.name||selCat;
+      notify(`✅ ${userName} restored to ${catName}!`);
+      setSelUser(""); setSelCat("");
+    };
+    return(<div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <select className="admin-input" value={selUser} onChange={e=>{setSelUser(e.target.value);setSelCat("");}}>
+          <option value="">— Select Player —</option>
+          {state.users.map(u=><option key={u.id} value={u.id}>{u.teamName} ({u.username})</option>)}
+        </select>
+        {selUser&&(<select className="admin-input" value={selCat} onChange={e=>setSelCat(e.target.value)}>
+          <option value="">— Select Category to Restore —</option>
+          {eliminated.length===0
+            ?<option disabled>No eliminations found for this player</option>
+            :eliminated.map(cat=><option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)
+          }
+        </select>)}
+        {selUser&&eliminated.length===0&&(
+          <p style={{fontSize:12,color:"var(--success)"}}>✅ This player is not eliminated in any category.</p>
+        )}
+        <button className="confirm-btn" onClick={restore} disabled={!selUser||!selCat}
+          style={{opacity:(!selUser||!selCat)?0.4:1}}>
+          ♻️ Restore Player
+        </button>
+      </div>
+    </div>);
+  };
+
   const AdminView=()=>{
     const [pw,setPw]=useState("");
 
@@ -1306,7 +1339,7 @@ export default function App() {
                 <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
                 <div style={{fontSize:11,color:"var(--accent)"}}>{p.pos} · {p.teamAbbr}</div>
               </div>
-              <button className="remove-btn" onClick={async()=>{const latestState=await loadLeagueState();const base=latestState||state;const ns={...base,customPlayers:base.customPlayers.filter((_,j)=>j!==i)};setState(ns);await saveLeagueState(ns);}}>✕</button>
+              <button className="remove-btn" onClick={()=>setState(s=>({...s,customPlayers:s.customPlayers.filter((_,j)=>j!==i)}))}>✕</button>
             </div>
           ))}
         </div>
@@ -1324,15 +1357,15 @@ export default function App() {
               {cat.fields.map(field=>(<div key={field.key} className="settings-field-row">
                 <span className="settings-field-label">{field.label}</span>
                 <div className="settings-field-controls">
-                  <button className="thresh-btn" onClick={async()=>{const ns={...state,thresholds:{...state.thresholds,[cat.id]:{...t,[field.key]:Math.max(field.min,(t[field.key]??0)-1)}}};setState(ns);await saveLeagueState(ns);}}>−</button>
-                  <input type="number" className="thresh-input" value={t[field.key]??0} min={field.min} max={field.max} onChange={async e=>{const val=Math.min(field.max,Math.max(field.min,parseInt(e.target.value)||0));const ns={...state,thresholds:{...state.thresholds,[cat.id]:{...t,[field.key]:val}}};setState(ns);await saveLeagueState(ns);}}/>
-                  <button className="thresh-btn" onClick={async()=>{const ns={...state,thresholds:{...state.thresholds,[cat.id]:{...t,[field.key]:Math.min(field.max,(t[field.key]??0)+1)}}};setState(ns);await saveLeagueState(ns);}}>+</button>
+                  <button className="thresh-btn" onClick={()=>setState(s=>({...s,thresholds:{...s.thresholds,[cat.id]:{...t,[field.key]:Math.max(field.min,(t[field.key]??0)-1)}}}))}>−</button>
+                  <input type="number" className="thresh-input" value={t[field.key]??0} min={field.min} max={field.max} onChange={e=>{const val=Math.min(field.max,Math.max(field.min,parseInt(e.target.value)||0));setState(s=>({...s,thresholds:{...s.thresholds,[cat.id]:{...t,[field.key]:val}}}))} }/>
+                  <button className="thresh-btn" onClick={()=>setState(s=>({...s,thresholds:{...s.thresholds,[cat.id]:{...t,[field.key]:Math.min(field.max,(t[field.key]??0)+1)}}}))}>+</button>
                 </div>
               </div>))}
             </div>);
           })}
         </div>
-        <button className="reset-thresholds-btn" onClick={async()=>{if(window.confirm("Reset all thresholds to defaults?")){const ns={...state,thresholds:DEFAULT_THRESHOLDS};setState(ns);await saveLeagueState(ns);}}}>↩ Reset to Defaults</button>
+        <button className="reset-thresholds-btn" onClick={()=>{if(window.confirm("Reset all thresholds to defaults?"))setState(s=>({...s,thresholds:DEFAULT_THRESHOLDS}));}}>↩ Reset to Defaults</button>
       </div>}
       {adminTab==="users"&&<div>
         <h3 className="section-title">Add User</h3>
@@ -1345,9 +1378,14 @@ export default function App() {
         <h3 className="section-title" style={{marginTop:20}}>All Users ({state.users.length})</h3>
         <div className="player-list-admin">
           {state.users.map(u=>(
-            <UserAdminRow key={u.id} user={u} onReset={adminResetPassword} onRemove={()=>setState(s=>({...s,users:s.users.filter(x=>x.id!==u.id)}))} Avatar={Avatar}/>
+            <UserAdminRow key={u.id} user={u} onReset={adminResetPassword} onRemove={async()=>{const latestState=await loadLeagueState();const base=latestState||state;const ns={...base,users:base.users.filter(x=>x.id!==u.id)};setState(ns);await saveLeagueState(ns);}} Avatar={Avatar}/>
           ))}
           {!state.users.length&&<p className="empty-msg">No users yet</p>}
+        </div>
+        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:20}}>
+          <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>♻️ Restore Player to Category</h4>
+          <p style={{fontSize:12,color:"var(--muted)",marginBottom:14}}>Use this to fix a grading mistake — removes the elimination so the player can pick again.</p>
+          <RestorePlayerForm state={state} setState={setState} notify={notify} CATEGORIES={CATEGORIES} saveLeagueState={saveLeagueState} loadLeagueState={loadLeagueState}/>
         </div>
       </div>}
       {adminTab==="entry"&&<div>
@@ -1402,12 +1440,12 @@ export default function App() {
             ?<div>
               <div style={{background:"rgba(60,255,138,.1)",border:"1px solid var(--success)",borderRadius:8,padding:"10px 14px",fontSize:13,color:"var(--success)",marginBottom:10}}>✅ Week {state.currentWeek} picks are LOCKED</div>
               <button style={{background:"none",border:"1px solid var(--accent2)",color:"var(--accent2)",padding:"10px 18px",borderRadius:8,cursor:"pointer",fontSize:13,width:"100%"}}
-                onClick={async()=>{if(window.confirm("Unlock picks for Week "+state.currentWeek+"?")){const ns={...state,weekLocked:{...state.weekLocked,[`w${state.currentWeek}`]:false}};setState(ns);await saveLeagueState(ns);}}}>
+                onClick={()=>{if(window.confirm("Unlock picks for Week "+state.currentWeek+"?"))setState(s=>({...s,weekLocked:{...s.weekLocked,[`w${state.currentWeek}`]:false}}))}}>
                 🔓 Unlock Week {state.currentWeek} Picks
               </button>
             </div>
             :<button style={{background:"var(--accent)",color:"#000",border:"none",padding:12,borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14,width:"100%"}}
-              onClick={async()=>{if(window.confirm("Lock all picks for Week "+state.currentWeek+"? Players cannot change picks after this.")){const ns={...state,weekLocked:{...state.weekLocked,[`w${state.currentWeek}`]:true}};setState(ns);await saveLeagueState(ns);}}}>
+              onClick={()=>{if(window.confirm("Lock all picks for Week "+state.currentWeek+"? Players cannot change picks after this."))setState(s=>({...s,weekLocked:{...s.weekLocked,[`w${state.currentWeek}`]:true}}))}}>
               🔒 Lock All Week {state.currentWeek} Picks Now
             </button>
           }
