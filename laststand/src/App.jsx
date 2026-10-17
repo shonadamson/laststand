@@ -206,6 +206,8 @@ export default function App() {
   const [adminNewPw,setAdminNewPw]=useState("");
   const [adminNewTn,setAdminNewTn]=useState("");
   const [adminResultInputs,setAdminResultInputs]=useState({});
+  const [restoreUser,setRestoreUser]=useState("");
+  const [restoreCat,setRestoreCat]=useState("");
   const [view,setView]=useState("login");
   const [notification,setNotification]=useState(null);
   const [teams]=useState(TEAM_LIST);
@@ -1148,48 +1150,6 @@ export default function App() {
     </div>
   </div>);
 
-  const RestorePlayerForm=({state,setState,notify,CATEGORIES})=>{
-    const [selUser,setSelUser]=React.useState("");
-    const [selCat,setSelCat]=React.useState("");
-    const eliminated=selUser?CATEGORIES.filter(cat=>state.eliminations?.[selUser]?.[cat.id]===true):[];
-    const restore=async()=>{
-      if(!selUser||!selCat){notify("Select a player and category","error");return;}
-      const latestState=await loadLeagueState();
-      const base=latestState||state;
-      const newElims=JSON.parse(JSON.stringify(base.eliminations||{}));
-      if(newElims[selUser]) delete newElims[selUser][selCat];
-      const ns={...base,eliminations:newElims};
-      setState(ns);
-      await saveLeagueState(ns);
-      const userName=base.users.find(u=>u.id===selUser)?.teamName||selUser;
-      const catName=CATEGORIES.find(c=>c.id===selCat)?.name||selCat;
-      notify(`✅ ${userName} restored to ${catName}!`);
-      setSelUser(""); setSelCat("");
-    };
-    return(<div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <select className="admin-input" value={selUser} onChange={e=>{setSelUser(e.target.value);setSelCat("");}}>
-          <option value="">— Select Player —</option>
-          {state.users.map(u=><option key={u.id} value={u.id}>{u.teamName} ({u.username})</option>)}
-        </select>
-        {selUser&&(<select className="admin-input" value={selCat} onChange={e=>setSelCat(e.target.value)}>
-          <option value="">— Select Category to Restore —</option>
-          {eliminated.length===0
-            ?<option disabled>No eliminations found for this player</option>
-            :eliminated.map(cat=><option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)
-          }
-        </select>)}
-        {selUser&&eliminated.length===0&&(
-          <p style={{fontSize:12,color:"var(--success)"}}>✅ This player is not eliminated in any category.</p>
-        )}
-        <button className="confirm-btn" onClick={restore} disabled={!selUser||!selCat}
-          style={{opacity:(!selUser||!selCat)?0.4:1}}>
-          ♻️ Restore Player
-        </button>
-      </div>
-    </div>);
-  };
-
   const AdminView=()=>{
     const [pw,setPw]=useState("");
 
@@ -1385,7 +1345,32 @@ export default function App() {
         <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16,marginTop:20}}>
           <h4 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,marginBottom:6}}>♻️ Restore Player to Category</h4>
           <p style={{fontSize:12,color:"var(--muted)",marginBottom:14}}>Use this to fix a grading mistake — removes the elimination so the player can pick again.</p>
-          <RestorePlayerForm state={state} setState={setState} notify={notify} CATEGORIES={CATEGORIES}/>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <select className="admin-input" value={restoreUser} onChange={e=>{setRestoreUser(e.target.value);setRestoreCat("");}}>
+              <option value="">— Select Player —</option>
+              {state.users.map(u=><option key={u.id} value={u.id}>{u.teamName} ({u.username})</option>)}
+            </select>
+            {restoreUser&&<select className="admin-input" value={restoreCat} onChange={e=>setRestoreCat(e.target.value)}>
+              <option value="">— Select Category to Restore —</option>
+              {(restoreUser?CATEGORIES.filter(cat=>state.eliminations?.[restoreUser]?.[cat.id]===true):[]).length===0
+                ?<option disabled>Not eliminated in any category</option>
+                :(restoreUser?CATEGORIES.filter(cat=>state.eliminations?.[restoreUser]?.[cat.id]===true):[]).map(cat=><option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
+            </select>}
+            {restoreUser&&(restoreUser?CATEGORIES.filter(cat=>state.eliminations?.[restoreUser]?.[cat.id]===true):[]).length===0&&<p style={{fontSize:12,color:"var(--success)"}}>✅ This player has no eliminations.</p>}
+            <button className="confirm-btn" style={{opacity:(!restoreUser||!restoreCat)?0.4:1}} onClick={async()=>{
+              if(!restoreUser||!restoreCat){notify("Select a player and category","error");return;}
+              const latestState=await loadLeagueState();
+              const base=latestState||state;
+              const newElims=JSON.parse(JSON.stringify(base.eliminations||{}));
+              if(newElims[restoreUser]) delete newElims[restoreUser][restoreCat];
+              const ns={...base,eliminations:newElims};
+              setState(ns); await saveLeagueState(ns);
+              const uName=base.users.find(u=>u.id===restoreUser)?.teamName||restoreUser;
+              const cName=CATEGORIES.find(c=>c.id===restoreCat)?.name||restoreCat;
+              notify("✅ "+uName+" restored to "+cName+"!");
+              setRestoreUser(""); setRestoreCat("");
+            }}>♻️ Restore Player</button>
+          </div>
         </div>
       </div>}
       {adminTab==="entry"&&<div>
